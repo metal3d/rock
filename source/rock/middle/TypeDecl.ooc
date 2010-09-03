@@ -77,7 +77,7 @@ TypeDecl: abstract class extends Declaration {
             meta = ClassDecl new(name + "Class", null, true, token)
             meta nonMeta = this
             meta thisDecl = this thisDecl
-            meta setSuperType(BaseType new("Class", nullToken))
+            meta setSuperType(BaseType new("Class", token))
 
             // if we access to "Dog", we access to an object of type "DogClass"
             type = meta getInstanceType()
@@ -127,9 +127,9 @@ TypeDecl: abstract class extends Declaration {
         if(!this isMeta && superType != null) {
             // TODO: there's probably a better way, but this works fine =)
             if(superType getName() == "Object" && name != "Class") {
-                meta setSuperType(BaseType new("ClassClass", nullToken))
+                meta setSuperType(BaseType new("ClassClass", superType token))
             } else {
-                meta setSuperType(BaseType new(superType getName() + "Class", nullToken))
+                meta setSuperType(BaseType new(superType getName() + "Class", superType token))
             }
         }
     }
@@ -186,7 +186,6 @@ TypeDecl: abstract class extends Declaration {
             old := functions get(hash)
             if (old != null && fDecl getName() != "init") { /* init is an exception */
                 if(old == fDecl) Exception new(This, "Replacing %s with %s, which is the same!" format (old getName() toCString(), fDecl getName() toCString())) throw()
-                Exception new(This, "xxx %s with %s, xxx" format (old getName() toCString(), fDecl getName() toCString())) throw()
                 token module params errorHandler onError(FunctionRedefinition new(old, fDecl))
                 return
             }
