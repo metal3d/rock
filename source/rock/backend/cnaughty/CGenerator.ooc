@@ -181,7 +181,7 @@ CGenerator: class extends Skeleton {
             current app("static ")
         }
         vDecl getType() write(current, vDecl getFullName())
-        if(vDecl expr)
+        if(vDecl expr && !vDecl isArg)
             current app(" = "). app(vDecl expr)
     }
 
@@ -275,14 +275,17 @@ CGenerator: class extends Skeleton {
     }
 
     visitStructLiteral: func (sl: StructLiteral) {
-        current app('('). app(sl getType()). app(") { ")
+        if(!sl getType() instanceOf?(AnonymousStructType)) {
+            current app('('). app(sl getType()). app(") ")
+        }
+        current app("{ "). tab()
         isFirst := true
         for(element in sl elements) {
             if(!isFirst) current app(", ")
-            current app(element)
+            current nl(). app(element)
             isFirst = false
         }
-        current app(" }")
+        current untab(). nl(). app("}")
     }
 
     visitArrayLiteral: func (arrLit: ArrayLiteral) {

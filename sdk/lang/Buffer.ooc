@@ -54,38 +54,18 @@ Buffer: class extends Iterable<Char> {
 
     /**
      * Create a new String from a zero-terminated C String with known length
+     * optional flag for stringliteral initializaion with zero copying
      */
-    init: func ~withCStrAndLength(s : CString, length: SizeT) {
-        setLength(length)
-        memcpy(data, s, length)
-    }
-
-    /* for construction of String/Buffers from a StringLiteral */
-    init: func ~stringLiteral(s: CString, length: SizeT, isStringLiteral: Bool) {
-        if(isStringLiteral) {
+    init: func ~cStrWithLength(s: CString, length: SizeT, stringLiteral? := false) {
+        if(stringLiteral?) {
             data = s
             size = length
             mallocAddr = null
             capacity = 0
-        } else raise("optional constant function arguments are not supported yet! otherwise this branch would execute what withCStrAndLength does currently")
-    }
-
-    _makeWritable: func {
-        _makeWritable(size)
-    }
-
-    _makeWritable: func~withCapacity(newSize: SizeT) {
-        sizeCp := size
-        dataCp := data
-        data = null
-        
-        size = 0
-        capacity = 0
-        setCapacity(newSize > sizeCp ? newSize : sizeCp)
-        size = sizeCp
-        
-        memcpy(data, dataCp, sizeCp)
-        data[sizeCp] = '\0'
+        } else {
+    	    setLength(length)
+	        memcpy(data, s, length) 
+        }        
     }
 
     /**
@@ -115,8 +95,12 @@ Buffer: class extends Iterable<Char> {
             if (rs) shiftLeft(rs)
             
             tmp := gc_realloc(mallocAddr, capacity)
-            if(!tmp) {
-                Exception new(This, "Couldn't allocate enough memory for Buffer to grow to capacity " + capacity toString()) throw()
+            if(!tmp) OutOfMemoryException new(This) throw()
+            
+            // if we were coming from a string literal, copy the original data as well (gc_realloc cant work on text segment)
+            if(size > 0 && mallocAddr == null) {
+            	rs = 0
+            	memcpy(tmp, data, size)
             }
 
             mallocAddr = tmp
@@ -167,11 +151,10 @@ Buffer: class extends Iterable<Char> {
 
     /** return a copy of *this*. */
     clone: func -> This {
-        //"Cloning %s, size %zd" printfln(data, size)
         clone(size)
     }
 
-    clone: func ~withMinimum (minimumLength : SizeT) -> This {
+    clone: func ~withMinimum (minimumLength := size) -> This {
         newCapa := minimumLength > size ? minimumLength : size
         copy := new(newCapa)
         //"Cloning %s, new capa %zd, new size %zd" printfln(data, newCapa, size)
@@ -184,11 +167,15 @@ Buffer: class extends Iterable<Char> {
         substring(start, size)
     }
 
-    /** *this* will be reduced to the characters in the range ``start..end`` */
-    substring: func (start: SizeT, end: SizeT) {
-        if (end != size) setLength(end)
-        if (start > 0) shiftRight(start)
-    }
+    /** *this* will be reduced to the characters in the range ``start..end``
+    	The substring begins at the specified start and extends to the character at index end - 1.
+    	So the length of the substring is end-start */
+    substring: func (start: SSizeT, end: SSizeT) {
+		if(start < 0) start += size + 1
+		if(end < 0) end += size + 1
+		if(end != size) setLength(end)
+		if(start > 0) shiftRight(start)
+	}
 
     /** return a This that contains *this*, repeated *count* times. */
     times: func (count: SizeT) {
@@ -302,17 +289,7 @@ Buffer: class extends Iterable<Char> {
         (size > 0) && data[size] == c
     }
 
-    /** calls find with searchCaseSenitive set to true by default
-        returns -1 if nothing is found, otherwise the position  */
-    find: func (what: This, offset: SSizeT) -> SSizeT {
-        find(what data, what size, offset, true)
-    }
-
-    find: func ~char (what: Char, offset: SSizeT) -> SSizeT {
-        find (what&, 1, offset, true)
-    }
-
-    find: func ~charWithCase (what: Char, offset: SSizeT, searchCaseSensitive: Bool) -> SSizeT {
+    find: func ~char (what: Char, offset: SSizeT, searchCaseSensitive := true) -> SSizeT {
         find (what&, 1, offset, searchCaseSensitive)
     }
 
@@ -321,11 +298,11 @@ Buffer: class extends Iterable<Char> {
         use offset 0 for a new search, then increase it by the last found position +1
         look at implementation of findAll() for an example
     */
-    find: func ~withCase (what: This, offset: SSizeT, searchCaseSensitive : Bool) -> SSizeT {
+    find: func (what: This, offset: SSizeT, searchCaseSensitive := true) -> SSizeT {
         find~pointer(what data, what size, offset, searchCaseSensitive)
     }
 
-    find: func ~pointer (what: Char*, whatSize: SizeT, offset: SSizeT, searchCaseSensitive : Bool) -> SSizeT {
+    find: func ~pointer (what: Char*, whatSize: SizeT, offset: SSizeT, searchCaseSensitive := true) -> SSizeT {
         if (offset >= size || offset < 0 || what == null || whatSize == 0) return -1
 
         maxpos : SSizeT = size - whatSize // need a signed type here
@@ -354,17 +331,12 @@ Buffer: class extends Iterable<Char> {
         -1
     }
 
-    /** returns a list of positions where buffer has been found, or an empty list if not */
-    findAll: func ( what : This) -> ArrayList <SizeT> {
-        findAll( what, true)
-    }
-
     /** returns a list of positions where buffer has been found, or an empty list if not  */
-    findAll: func ~withCase ( what : This, searchCaseSensitive: Bool) -> ArrayList <SizeT> {
+    findAll: func ~withCase ( what : This, searchCaseSensitive := true) -> ArrayList <SizeT> {
         findAll(what data, what size, searchCaseSensitive)
     }
 
-    findAll: func ~pointer ( what : Char*, whatSize: SizeT, searchCaseSensitive: Bool) -> ArrayList <SizeT> {
+    findAll: func ~pointer ( what : Char*, whatSize: SizeT, searchCaseSensitive := true) -> ArrayList <SizeT> {
         if (what == null || whatSize == 0) return ArrayList <SizeT> new(0)
         result := ArrayList <SizeT> new (size / whatSize)
         offset : SSizeT = (whatSize ) * -1
@@ -372,12 +344,7 @@ Buffer: class extends Iterable<Char> {
         result
     }
 
-    /** replaces all occurences of *what* with *whit */
-    replaceAll: func ~buf (what, whit : This) {
-        replaceAll(what, whit, true)
-    }
-
-    replaceAll: func ~bufWithCase (what, whit: This, searchCaseSensitive: Bool) {
+    replaceAll: func ~buf (what, whit: This, searchCaseSensitive := true) {
         findResults := findAll(what, searchCaseSensitive)
         if (findResults == null || findResults size == 0) return
         
@@ -435,31 +402,20 @@ Buffer: class extends Iterable<Char> {
      */
     toString: func -> String { String new(this) }
 
-    /** return the index of *c*, starting at 0. If *this* does not contain *c*, return -1. */
-    indexOf: func ~charZero (c: Char) -> SSizeT {
-        indexOf(c, 0)
-    }
-
     /** return the index of *c*, but only check characters ``start..length``.
         However, the return value is the index of the *c* relative to the
         string's beginning. If *this* does not contain *c*, return -1. */
-    indexOf: func ~char (c: Char, start: SizeT) -> SSizeT {
+    indexOf: func ~char (c: Char, start: SSizeT = 0) -> SSizeT {
         for(i in start..size) {
             if((data + i)@ == c) return i
         }
         return -1
     }
 
-    /** return the index of *s*, starting at 0. If *this* does not contain *s*,
-        return -1. */
-    indexOf: func ~bufZero (s: This) -> SSizeT {
-        indexOf~buf(s, 0)
-    }
-
     /** return the index of *s*, but only check characters ``start..length``.
         However, the return value is relative to the *this*' first character.
         If *this* does not contain *c*, return -1. */
-    indexOf: func ~buf (s: This, start: Int) -> SSizeT {
+    indexOf: func ~buf (s: This, start: SSizeT = 0) -> SSizeT {
         return find(s, start, false)
     }
 
@@ -469,21 +425,6 @@ Buffer: class extends Iterable<Char> {
 
     /** return *true* if *this* contains the string *s* */
     contains?: func ~buf (s: This) -> Bool { indexOf(s) != -1 }
-
-    /** all characters contained by *s* stripped at both ends. */
-    trimMulti: func ~pointer (s: Char*, sLength: SizeT) {
-        if(size == 0 || sLength == 0) return
-        start := 0
-        while (start < size && (data + start)@ containedIn? (s, sLength) ) start += 1
-        end := size
-        while (end > 0 && (data + end -1)@ containedIn? (s, sLength) ) end -= 1
-        if(start >= end) start = end
-        substring(start, end)
-    }
-
-    trimMulti: func ~buf(s : This) {
-        trim(s data, s size)
-    }
 
     trim: func~pointer(s: Char*, sLength: SizeT) {
         trimRight(s, sLength)
@@ -655,8 +596,8 @@ Buffer: class extends Iterable<Char> {
      * @return the index-th character of this string
      */
     get: func (index: SSizeT) -> Char {
-        if(index < 0) index = size - index
-        if(index >= size) Exception new(This, "Buffer overflow!  Offset is larger than buffer size (%zd < %zd)" format(index, size)) throw()
+        if(index < 0) index = size + index
+        if(index >= size) OutOfBoundsException new(This, index, size) throw()
         data[index]
     }
 
@@ -665,7 +606,7 @@ Buffer: class extends Iterable<Char> {
      */
     set: func (index: SSizeT, value: Char) {
         if(index < 0) index = size - index
-        if(index >= size) Exception new(This, "Buffer overflow!  Offset is larger than buffer size (%zd < %zd)" format(index, size)) throw()
+        if(index >= size) OutOfBoundsException new(This, index, size) throw()
         data[index] = value
     }
 

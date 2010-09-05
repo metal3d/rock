@@ -3,7 +3,8 @@ import ../frontend/[Token, BuildParams, CommandLine]
 import Visitor, Expression, FunctionDecl, Argument, Type, VariableAccess,
        TypeDecl, Node, VariableDecl, AddressOf, CommaSequence, BinaryOp,
        InterfaceDecl, Cast, NamespaceDecl, BaseType, FuncType, Return,
-       TypeList, Scope, Block, InlineContext
+       TypeList, Scope, Block, InlineContext, StructLiteral, NullLiteral,
+       IntLiteral
 import tinker/[Response, Resolver, Trail, Errors]
 
 /**
@@ -416,6 +417,16 @@ FunctionCall: class extends Expression {
                 return Response OK
             }
 
+            if(!handleOptargs(trail, res) ok()) {
+                res wholeAgain(this, "looping because of optargs!")
+                return Response OK
+            }
+
+            if(!handleVarargs(trail, res) ok()) {
+                res wholeAgain(this, "looping because of varargs!")
+                return Response OK
+            }
+
             if(!handleInterfaces(trail, res) ok()) {
                 res wholeAgain(this, "looping because of interfaces!")
                 return Response OK
@@ -763,6 +774,76 @@ FunctionCall: class extends Expression {
     }
 
     /**
+     * Resolve optional arguments, ie. fill in default values
+     */
+    handleOptargs: func (trail: Trail, res: Resolver) -> Response {
+        if(ref args size <= args size) return Response OK
+
+        for(i in args size..ref args size) {
+            refArg := ref args[i]
+            // use the default value as an argument expression.
+            if(refArg expr) args add(refArg expr)
+        }
+        
+        Response OK
+    }
+
+    /**
+     * Resolve ooc variable arguments
+     */
+    handleVarargs: func (trail: Trail, res: Resolver) -> Response {
+
+        if(ref args empty?()) return Response OK
+
+        match (lastArg := ref args last()) {
+            case vararg: VarArg =>
+                if(vararg name != null) {
+                    numVarArgs := (args size - (ref args size - 1))
+                    
+                    if(args last() getType() getName() == "VarArgs") {
+                        return Response OK
+                    }
+                    
+                    ast := AnonymousStructType new(token)
+                    elements := ArrayList<Expression> new()
+                    for(i in (ref args size - 1)..(args size)) {
+                        arg := args[i]
+                        elements add(TypeAccess new(arg getType(), token))
+                        ast types add(NullLiteral type)
+                        
+                        elements add(arg)
+                        ast types add(arg getType())
+                    }
+                    argsSl := StructLiteral new(ast, elements, token)
+                    argsDecl := VariableDecl new(null, generateTempName("__va_args"), argsSl, token)
+                    if(!trail addBeforeInScope(this, argsDecl)) {
+                        res throwError(CouldntAddBeforeInScope new(token, this, argsDecl, trail))
+                    }
+
+                    vaType := BaseType new("VarArgs", token)
+                    elements2 := [
+                        AddressOf new(VariableAccess new(argsDecl, token), token)
+                        NullLiteral new(token)
+                        IntLiteral new(numVarArgs, token)
+                    ] as ArrayList<Expression>
+                    
+                    varargsSl := StructLiteral new(vaType, elements2, token)
+                    vaDecl := VariableDecl new(null, generateTempName("__va"), varargsSl, token)
+                    if(!trail addBeforeInScope(this, vaDecl)) {
+                        res throwError(CouldntAddBeforeInScope new(token, this, vaDecl, trail))
+                    }
+                    numVarArgs times(||
+                        args removeAt(args lastIndex())
+                    )
+                    args add(VariableAccess new(vaDecl, token))
+                }
+        }
+
+        Response OK
+
+    }
+
+    /**
      * Resolve type arguments
      */
     handleGenerics: func (trail: Trail, res: Resolver) -> Response {
@@ -922,20 +1003,21 @@ FunctionCall: class extends Expression {
                     /* myFunction: func <T> (T: Class) */
                     if(arg getName() == typeArgName) {
                         implArg := args get(j)
-                        if(implArg instanceOf?(VariableAccess)) {
-                            if(implArg as VariableAccess getRef() == null) {
-                                finalScore == -1
-                                return null
-                            }
-                            result := BaseType new(implArg as VariableAccess getName(), implArg token)
-                            result setRef(implArg as VariableAccess getRef()) // FIXME: that is experimental. is that a good idea?
+                        match implArg {
+                            case vAcc: VariableAccess =>
+                                if(!vAcc getRef()) {
+                                    finalScore == -1
+                                    return null
+                                }
+                                result := BaseType new(vAcc getName(), implArg token)
+                                result setRef(vAcc getRef())
 
-                            if(debugCondition()) " >> Found ref-arg %s for typeArgName %s, returning %s" format(implArg toString() toCString(), typeArgName toCString(), result toString() toCString()) println()
-                            return result
-                        } else if(implArg instanceOf?(TypeAccess)) {
-                            return implArg as TypeAccess inner
-                        } else if(implArg instanceOf?(Type)) {
-                            return implArg as Type
+                                if(debugCondition()) " >> Found ref-arg %s for typeArgName %s, returning %s" format(implArg toString() toCString(), typeArgName toCString(), result toString() toCString()) println()
+                                return result
+                            case tAcc: TypeAccess =>
+                                return tAcc inner
+                            case type: Type =>
+                                return type
                         }
                     }
                     j += 1
@@ -1119,29 +1201,47 @@ FunctionCall: class extends Expression {
      * Returns true if decl has a signature compatible with this function call
      */
     matchesArgs: func (decl: FunctionDecl) -> Bool {
-        declArgs := decl args getSize()
-        callArgs := args getSize()
 
-        // same number of args
-        if(declArgs == callArgs) {
-            return true
-        }
+        callIter := args iterator()
+        declIter := decl args iterator()
 
-        // or, vararg
-        if(decl args getSize() > 0) {
-            last := decl args last()
-
-            // and less fixed decl args than call args ;)
-            if(last instanceOf?(VarArg) && declArgs - 1 <= callArgs) {
+        // deal with all the callArgs we have
+        while(callIter hasNext?()) {
+            if(!declIter hasNext?()) {
+                if(debugCondition()) "Args don't match! Too many call args" println()
+                return false
+            }
+            
+            if(declIter next() instanceOf?(VarArg)) {
+                if(debugCondition()) "Varargs swallow all!" println()
+                // well, whatever we have left, VarArgs swallows it all.
                 return true
             }
+
+            if(debugCondition()) "Regular arg consumes one." println()
+            // if not varargs, consume one callarg.
+            callIter next()
         }
 
-        if(debugCondition()) {
-            "Args don't match! declArgs = %d, callArgs = %d" format(declArgs, callArgs) println()
+        // deal with remaining declArgs
+        while(declIter hasNext?()) {
+            declArg := declIter next()
+            if(declArg instanceOf?(VarArg)) {
+                if(debugCondition()) "Ending on a classy varargs." println()
+                // varargs can also be omitted.
+                return true
+            }
+            
+            if(declArg expr) {
+                // optional arg
+                if(debugCondition()) "Optional arg." println()
+                continue
+            }
+            // not an optional arg? then it's not a match, sorry m'am.
+            if(debugCondition()) "Args don't match! Not enough call args" println()
+            return false
         }
-
-        return false
+        true
     }
 
     getType: func -> Type { returnType }

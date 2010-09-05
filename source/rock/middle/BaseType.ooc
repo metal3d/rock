@@ -1,11 +1,11 @@
 import structs/[List, ArrayList]
 
-import ../backend/cnaughty/AwesomeWriter, ../frontend/BuildParams
+import ../backend/cnaughty/AwesomeWriter, ../frontend/[BuildParams, Token]
 import tinker/[Response, Resolver, Trail, Errors]
 
 import Type, Declaration, VariableAccess, VariableDecl, TypeDecl,
        InterfaceDecl, Node, ClassDecl, CoverDecl, Cast, FuncType,
-       FunctionCall
+       FunctionCall, Module
 
 NumericState: enum {
     UNKNOWN, YES, NO
@@ -111,7 +111,13 @@ BaseType: class extends Type {
     resolve: func (trail: Trail, res: Resolver) -> Response {
 
         if(isResolved()) {
-            return Response OK
+            if(ref token module && ref token module dead) {
+                "%s outdated from module %s, re-resolving!" printfln(name toCString(), ref token module fullName toCString())
+                ref = null
+                res wholeAgain(this, "re-resolved because of dead module")
+            } else {
+                return Response OK
+            }
         }
 
         if(!ref) {
@@ -194,6 +200,7 @@ BaseType: class extends Type {
 
     isResolved: func -> Bool {
         if(ref == null) return false
+        if(ref token module && ref token module dead) return false
         if(typeArgs == null) return true
         for(typeArg in typeArgs) if(!typeArg isResolved()) {
             return false

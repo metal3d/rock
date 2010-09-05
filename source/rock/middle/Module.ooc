@@ -9,12 +9,20 @@ import tinker/[Response, Resolver, Trail, Errors]
 
 Module: class extends Node {
 
+    // statistics house-keeping
     timesImported := 0
     timesLooped := 0
 
-    path, fullName, simpleName, packageName, underName, pathElement : String
+    // if this module is out-of-date, 'dead' is set to true.
+    dead: Bool { get set }
+
+    // all variants of useful paths
+    path, fullName, simpleName, underName, pathElement, oocPath: String
+    
+    // mostly controls the generation of an implicit main
     main := false
 
+    // 
     types      := OrderedMultiMap<String, TypeDecl> new()
     addons     := ArrayList<Addon> new()
     functions  := OrderedMultiMap<String, FunctionDecl> new()
@@ -35,21 +43,23 @@ Module: class extends Node {
 
     init: func ~module (.fullName, =pathElement, =params, .token) {
         super(token)
-        this path = fullName replaceAll('/', File separator)
+        this path = (File separator == '/') ? fullName : fullName replaceAll('/', File separator)
+        this oocPath = pathElement + File separator + path + ".ooc"
+
+        // that's a Win32 fix - but I think it's due to an issue in 
         this fullName = fullName replaceAll(File separator, '/')
         idx := this fullName lastIndexOf('/')
 
         match idx {
             case -1 =>
                 simpleName = this fullName clone()
-                packageName = ""
             case =>
                 simpleName = this fullName substring(idx + 1)
-                packageName = this fullName substring(0, idx)
         }
 
         underName = sanitize(this fullName)
-        packageName = sanitize(packageName)
+        
+        dead = false
     }
 
     clone: func -> This {
@@ -175,22 +185,13 @@ Module: class extends Node {
 
     accept: func (visitor: Visitor) { visitor visitModule(this) }
 
-    getPath: func ~full -> String { path }
-
     getPath: func (suffix: String) -> String {
         last := (File new(pathElement) name())
         return (last + File separator) + fullName replaceAll('/', File separator) + suffix
     }
 
     getOocPath: func -> String {
-        path + ".ooc"
-    }
-
-    getParentPath: func -> String {
-        // FIXME that's sub-optimal
-        fileName := pathElement + File separator + fullName + ".ooc"
-        parentPath := File new(fileName) parent() path
-        return parentPath
+        oocPath
     }
 
     /** return global (e.g. non-namespaced) imports */
@@ -310,43 +311,41 @@ Module: class extends Node {
      * we expect to add to the resolvers list.
      */
     parseImports: func (resolver: Resolver) {
+        for (imp in getAllImports()) {
+            if (imp module) continue // nothing to do
 
-        for(imp: Import in getAllImports()) {
-            if(imp module != null) continue
-
-            impPath = null, impElement = null : File
-            path = null: String
-            AstBuilder getRealImportPath(imp, this, params, path&, impPath&, impElement&)
-            if(impPath == null) {
+            // import paths may contain ".." or relative paths - get it straight first
+            (_path, impPath, impElement) := AstBuilder getRealImportPath(imp, this, params)
+            if(!impPath) {
                 params errorHandler onError(ModuleNotFound new(imp))
                 continue
             }
             absolutePath := File new(impPath path) getAbsolutePath()
-
-            cached : Module = null
-            cached = AstBuilder cache get(absolutePath)
-
+            // the cache is a key-value store where keys are the absolute paths of modules.
+            cached := AstBuilder cache get(absolutePath)
             impLastModified := impPath lastModified()
 
-            if(cached == null || impLastModified > cached lastModified) {
+            // if it's not in the cache or outdated, reparse.
+            if(!cached || impLastModified > cached lastModified) {
                 if(cached && params veryVerbose) {
-                    printf("%s has been changed, recompiling... (%d vs %d), impPath = %s\n", path toCString(), File new(impPath path) lastModified(), cached lastModified, impPath path toCString());
+                    printf("%s has been changed, recompiling... (%d vs %d), impPath = %s\n", _path toCString(), File new(impPath path) lastModified(), cached lastModified, impPath path toCString());
                 }
 
-                cached = Module new(path[0..(path length()-4)], impElement path, params, nullToken)
-                AstBuilder cache remove(impPath path)
-                AstBuilder cache put(File new(impPath path) getAbsolutePath(), cached)
+                cached = Module new(_path[0..(_path size - 4)], impElement path, params, nullToken)
+                // clean the cache
+                AstBuilder cache remove(absolutePath)
+                AstBuilder cache put(absolutePath, cached)
                 imp setModule(cached)
 
                 cached token = Token new(0, 0, cached)
-                if(resolver != null) {
-                    resolver addModule(cached)
-                }
+                if(resolver) resolver addModule(cached)
+                
                 cached lastModified = impLastModified
                 AstBuilder new(impPath path, cached, params)
-                cached parseImports(resolver)
             }
+            
             imp setModule(cached)
+            cached parseImports(resolver)
         }
     }
 
