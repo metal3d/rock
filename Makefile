@@ -4,7 +4,7 @@ NQ_PATH=source/rock/frontend/NagaQueen.c
 DATE=$(shell date +%Y-%m-%d)
 TIME=$(shell date +%H:%M)
 OOC_WARN_FLAGS?=+-w
-OOC_OWN_FLAGS=-sourcepath=source -v +-O0 -g +-rdynamic -ignoredefine=ROCK_BUILD_ ${OOC_WARN_FLAGS}
+OOC_OWN_FLAGS=-sourcepath=source -v +-O0 -g -ignoredefine=ROCK_BUILD_ ${OOC_WARN_FLAGS}
 
 PREFIX?=/usr
 MAN_INSTALL_PATH?=/usr/local/man/man1
@@ -13,7 +13,7 @@ BIN_INSTALL_PATH?=${PREFIX}/bin
 ifdef WINDIR
 	OOC_OWN_FLAGS+=+-DROCK_BUILD_DATE=\\\"${DATE}\\\" +-DROCK_BUILD_TIME=\\\"${TIME}\\\"
 else
-	OOC_OWN_FLAGS+=+-DROCK_BUILD_DATE=\"${DATE}\" +-DROCK_BUILD_TIME=\"${TIME}\"
+	OOC_OWN_FLAGS+=+-DROCK_BUILD_DATE=\"${DATE}\" +-DROCK_BUILD_TIME=\"${TIME}\" +-rdynamic
 endif
 
 OOC?=rock
@@ -30,7 +30,7 @@ all: bootstrap
 # http://github.com/nddrylliog/greg
 grammar:
 	${PARSER_GEN} ../nagaqueen/grammar/nagaqueen.leg > ${NQ_PATH}
-	make .libs/NagaQueen.o
+	$(MAKE) .libs/NagaQueen.o
 
 .libs/NagaQueen.o: source/rock/frontend/NagaQueen.c
 	mkdir -p .libs
@@ -55,9 +55,9 @@ ifneq ($(IS_BOOTSTRAP),)
 	@echo "Creating bin/ in case it does not exist."
 	mkdir -p bin/
 	@echo "Compiling from C source"
-	cd build/ && ROCK_DIST=.. make
+	cd build/ && ROCK_DIST=.. $(MAKE)
 	@echo "Now re-compiling ourself"
-	OOC=bin/c_rock ROCK_DIST=. make self
+	OOC=bin/c_rock ROCK_DIST=. $(MAKE) self
 	@echo "Congrats! you have a boostrapped version of rock in bin/rock now. Have fun!"
 else
 	@cat BOOTSTRAP
@@ -88,11 +88,11 @@ rescue:
 	git pull
 	rm -rf build/
 	wget http://commondatastorage.googleapis.com/rock-linux/rock-bootstrap-only.tar.bz2 -O - | tar xjvmp
-	make clean bootstrap
+	$(MAKE) clean bootstrap
 
 # Compile rock with the backup'd version of itself
 safe:
-	OOC=bin/safe_rock make self
+	OOC=bin/safe_rock $(MAKE) self
 
 # Clean all temporary files that may make a build fail
 clean:

@@ -35,7 +35,7 @@ version(windows) {
     /*
      * file-related functions from Win32
      */
-    FindFirstFile: extern func (CString, FindData*) -> Handle
+    FindFirstFile: extern(FindFirstFileA) func (CString, FindData*) -> Handle
     FindNextFile: extern func(Handle, FindData*) -> Bool
     FindClose: extern func (Handle)
     GetFileAttributes: extern func (CString) -> Long
@@ -77,9 +77,11 @@ version(windows) {
 
         _getFindData: func -> (FindData, Bool) {
             ffd: FindData
-            hFind := FindFirstFile(path as CString, ffd&)
+            hFind := FindFirstFile(path toCString(), ffd&)
             if (hFind != INVALID_HANDLE_VALUE) FindClose(hFind)
-            else return (ffd, false)
+            else {
+                return (ffd, false)
+            }
             return (ffd, true)
         }
 
@@ -150,7 +152,7 @@ version(windows) {
 
             parent := parent()
             if(!parent exists?()) parent mkdir()
-            CreateDirectory(path as CString, null) ? 0 : -1
+            CreateDirectory(path toCString(), null) ? 0 : -1
         }
 
         /**
@@ -201,7 +203,7 @@ version(windows) {
         _getChildren: func <T> (T: Class) -> ArrayList<T> {
             result := ArrayList<T> new()
             ffd: FindData
-            hFile := FindFirstFile((path + "\\*") as CString, ffd&)
+            hFile := FindFirstFile((path + "\\*") toCString(), ffd&)
             running := (hFile != INVALID_HANDLE_VALUE)
             while(running) {
                 if(!_isDirHardlink?(ffd fileName)) {
@@ -211,7 +213,7 @@ version(windows) {
                     b append('\\')
                     b append(ffd fileName, l)
                     s := String new(b)
-                    candidate : T = (T == String) ? s : File new(this, s)
+                    candidate : T = (T == String) ? s : File new(s)
                     result add(candidate)
                 }
                 running = FindNextFile(hFile, ffd&)
