@@ -49,15 +49,6 @@ SequenceDriver: class extends Driver {
             ("Sequence driver, using " + params sequenceThreads toString() + " thread" + (params sequenceThreads > 1 ? "s" : "")) println()
         }
 
-        if((params clean && !params libcache && !params outPath exists?()) || !File new(params libcachePath) exists?()) {
-            if(params verbose)  printf("Must clean and %s doesn't exist, re-generating\n", params outPath path toCString())
-            params outPath mkdirs()
-            for(candidate in module collectDeps()) {
-                CGenerator new(params, candidate) write()
-            }
-        }
-
-        if(params verbose) printf("Copying local headers\n")
         copyLocalHeaders(module, params, ArrayList<Module> new())
 
         sourceFolders = collectDeps(module, HashMap<String, SourceFolder> new(), ArrayList<Module> new())
@@ -75,7 +66,7 @@ SequenceDriver: class extends Driver {
                 hash := ac_X31_hash(sourceFolder name) + 42
                 Terminal setFgColor((hash % (Color cyan - Color red)) + Color red)
                 if(hash & 0b01) Terminal setAttr(Attr bright)
-                printf("%s, ", sourceFolder name toCString())
+                "%s, " printf(sourceFolder name)
                 Terminal reset()
                 fflush(stdout)
             }
@@ -84,7 +75,6 @@ SequenceDriver: class extends Driver {
         }
         if(params verbose) println()
 
-        doesLib := (params staticlib != null || params dynamiclib != null)
         if(params link && (params staticlib == null || params dynamiclib != null)) {
 
             initCompiler(params compiler)
@@ -99,19 +89,21 @@ SequenceDriver: class extends Driver {
                 params compiler defineSymbol(define)
             }
 
-            if(!doesLib) for(dynamicLib in params dynamicLibs) {
+            for(dynamicLib in params dynamicLibs) {
                 params compiler addDynamicLibrary(dynamicLib)
             }
             for(incPath in params incPath getPaths()) {
                 params compiler addIncludePath(incPath getPath())
             }
             for(sourceFolder in sourceFolders) {
-                params compiler addIncludePath(params libcachePath + File separator + sourceFolder name)
+				if(params libcache) {
+					params compiler addIncludePath(params libcachePath + File separator + sourceFolder name)
+				}
             }
             for(additional in params additionals) {
                 params compiler addObjectFile(additional)
             }
-            if(!doesLib) for(libPath in params libPath getPaths()) {
+            for(libPath in params libPath getPaths()) {
                 params compiler addLibraryPath(libPath getAbsolutePath())
             }
 
@@ -122,15 +114,16 @@ SequenceDriver: class extends Driver {
                 params compiler setOutputPath(module simpleName)
             }
 
-            if(!doesLib) {
-                libs := getFlagsFromUse(module)
-                for(lib in libs) {
-                    params compiler addObjectFile(lib)
-                }
+            libs := getFlagsFromUse(module)
+            for(lib in libs) {
+                params compiler addObjectFile(lib)
             }
-
-            if(params enableGC && !doesLib) {
+            
+            if(params enableGC) {
                 params compiler addDynamicLibrary("pthread")
+                if(params dynamiclib != null) {
+                    params dynGC = true
+                }
                 if(params dynGC) {
                     params compiler addDynamicLibrary("gc")
                 } else {
@@ -171,10 +164,10 @@ SequenceDriver: class extends Driver {
             }
 
             if(params verbose) {
-                "Building archive %s with %s (%d modules total)" format(
-                    params staticlib toCString(),
-                    params libfolder ? "modules belonging to %s" format(params libfolder toCString()) : "all object files" toCString(),
-                    count) println()
+                "Building archive %s with %s (%d modules total)" printfln(
+                    params staticlib,
+                    params libfolder ? "modules belonging to %s" format(params libfolder) : "all object files",
+                    count)
             }
             archive save(params)
         }
@@ -199,17 +192,53 @@ SequenceDriver: class extends Driver {
                 for(module in dirtyModules) {
                     CGenerator new(params, module) write()
                 }
+                
+                if(params packageFilter) {
+                    dirtyModules = dirtyModules filter(|m|
+                        m fullName startsWith?(params packageFilter)
+                    )
+                }
                 return dirtyModules
             }
         }
 
         oPaths := ArrayList<String> new()
-        if(params verbose) printf("Re-generating all modules...\n")
+        if(params verbose) "Re-generating modules..." println()
+        reGenerated := ArrayList<Module> new()
         for(module in sourceFolder modules) {
-            CGenerator new(params, module) write()
+			result := CGenerator new(params, module) write()
+            
+            if(result && params verbose) ("Re-generated " + module fullName) println()
+            
+            // apply libfolder and package filter to see if it belongs here
+            if(params libfolder) {
+                path1 := File new(params libfolder) getAbsolutePath()
+                path2 := File new(module oocPath) getAbsolutePath()
+                if(!path2 startsWith?(path1)) continue
+            }
+            if(params packageFilter && !module fullName startsWith?(params packageFilter)) {
+                if(params verbose) "Filtering %s out" printfln(module fullName)
+                continue
+            }
+            
+            if(result) {
+				reGenerated add(module)
+			} else {
+				// already compiled, but still need to link with it
+				oPath := File new(params outPath, module path replaceAll(File separator, '_')) getPath() + ".o"
+				objectFiles add(oPath)
+			}
         }
+        
+        if(params verbose) {
+			if(reGenerated empty?()) {
+				"No files generated." println()
+			} else {
+				"%d files generated." printfln(reGenerated size)
+			}
+		}
 
-        return ArrayList<Module> new() // yay empty list
+        return reGenerated
 
     }
 
@@ -219,7 +248,7 @@ SequenceDriver: class extends Driver {
     buildSourceFolder: func (sourceFolder: SourceFolder, objectFiles: List<String>, reGenerated: List<Module>) -> Int {
 
         if(params libfolder != null && sourceFolder absolutePath != File new(params libfolder) getAbsolutePath()) {
-            if(params verbose) "Skipping (not needed for build of libfolder %s)" format(params libfolder toCString()) println()
+            if(params verbose) "Skipping (not needed for build of libfolder %s)" format(params libfolder) println()
             return 0
         }
 
@@ -245,8 +274,9 @@ SequenceDriver: class extends Driver {
 
         oPaths := ArrayList<String> new()
 
-        if(params verbose) printf("Compiling all modules...\n")
-        for(module in sourceFolder modules) {
+        if(params verbose) printf("Compiling regenerated modules...\n")
+        //for(module in sourceFolder modules) {
+		for(module in reGenerated) {
             code := buildIndividual(module, sourceFolder, oPaths, null, false)
             archive add(module)
             if(code != 0) return code
@@ -254,10 +284,11 @@ SequenceDriver: class extends Driver {
 
         if(params libcache) {
             // now build a static library
-            if(params veryVerbose) printf("Saving to library %s\n", sourceFolder outlib toCString())
+            if(params veryVerbose || params debugLibcache) "Saving to library %s\n" printfln(sourceFolder outlib)
             archive save(params)
         } else {
-            if(params veryVerbose) printf("Lib caching disabled, building from .o files\n")
+            if(params veryVerbose || params debugLibcache) "Lib caching disabled, building from .o files\n" println()
+         
             objectFiles addAll(oPaths)
         }
 
@@ -274,7 +305,7 @@ SequenceDriver: class extends Driver {
         params compiler setCompileOnly()
 
         path := File new(params outPath, module getPath("")) getPath()
-        //printf("build individual called, outPath=%s module=%s path=%s\n", params outPath path toCString(), module getPath("") toCString(), path toCString())
+        //printf("build individual called, outPath=%s module=%s path=%s\n", params outPath path, module getPath(""), path)
 
         oPath := File new(params outPath, module path replaceAll(File separator, '_')) getPath() + ".o"
         cPath := path + ".c"
@@ -289,7 +320,7 @@ SequenceDriver: class extends Driver {
 
         if(force || cFile lastModified() > comparison) {
 
-            if(params veryVerbose) printf("%s not in cache or out of date, (re)compiling\n", module getFullName() toCString())
+            if(params veryVerbose || params debugLibcache) "%s not in cache or out of date, (re)compiling" printfln(module getFullName())
 
             parent := File new(oPath) parent()
             if(!parent exists?()) {
@@ -338,7 +369,7 @@ SequenceDriver: class extends Driver {
             if(archive) archive add(module)
 
         } else {
-            if(params veryVerbose) printf("Skipping %s, unchanged source.\n", cPath toCString())
+            if(params veryVerbose || params debugLibcache) "Skipping %s, unchanged source.\n" printfln(cPath)
         }
 
         return 0
@@ -355,8 +386,7 @@ SequenceDriver: class extends Driver {
 
         for(module in sourceFolder modules) {
             for(use1 in module uses) {
-                useDef := use1 getUseDef()
-                getFlagsFromUse(useDef, flagsDone, usesDone)
+                getFlagsFromUse(use1 useDef, flagsDone, usesDone)
             }
         }
 
@@ -382,16 +412,17 @@ SequenceDriver: class extends Driver {
      */
     collectDeps: func (module: Module, toCompile: HashMap<String, SourceFolder>, done: ArrayList<Module>) -> HashMap<String, SourceFolder> {
 
-        absolutePath := File new(module getPathElement()) getAbsolutePath()
-        name := File new(absolutePath) name()
+        if(!module dummy) {
+            absolutePath := File new(module getPathElement()) getAbsolutePath()
+            name := File new(absolutePath) name()
 
-        sourceFolder := toCompile get(name)
-        if(sourceFolder == null) {
-            sourceFolder = SourceFolder new(name, absolutePath, params)
-            toCompile put(name, sourceFolder)
+            sourceFolder := toCompile get(name)
+            if(sourceFolder == null) {
+                sourceFolder = SourceFolder new(name, absolutePath, params)
+                toCompile put(name, sourceFolder)
+            }
+            sourceFolder modules add(module)
         }
-
-        sourceFolder modules add(module)
         done add(module)
 
         for(import1 in module getAllImports()) {
@@ -414,8 +445,7 @@ SourceFolder: class {
     archive : Archive
 
     init: func (=name, =absolutePath, =params) {
-        outlib = "%s%c%s-%s.a" format(params libcachePath toCString(), File separator, name toCString(), Target toString() toCString())
+        outlib = "%s%c%s-%s.a" format(params libcachePath, File separator, name, Target toString())
         archive = Archive new(name, outlib, params)
     }
 }
-

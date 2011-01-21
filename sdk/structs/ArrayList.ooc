@@ -36,6 +36,13 @@ ArrayList: class <T> extends List<T> {
         capacity = _size
     }
 
+    init: func ~fromNullTerminated (.data) {
+        i := 0
+        while(data[i] != null)
+            i += 1
+        init(data, i)
+    }
+
     add: func (element: T) {
         ensureCapacity(_size + 1)
         data[_size] = element
@@ -43,6 +50,9 @@ ArrayList: class <T> extends List<T> {
     }
 
     add: func ~withIndex (index: SSizeT, element: T) {
+        if(index < 0) index = _size + index
+        if(index < 0 || index > _size) OutOfBoundsException new(This, index, _size) throw()
+
         // inserting at 0 can be optimized
         if(index == 0) {
             ensureCapacity(_size + 1)
@@ -76,6 +86,8 @@ ArrayList: class <T> extends List<T> {
     }
 
     get: inline func(index: SSizeT) -> T {
+        if(index < 0) index = _size + index
+        if(index < 0 || index >= _size) OutOfBoundsException new(This, index, _size) throw()
         checkIndex(index)
         return data[index]
     }
@@ -161,8 +173,7 @@ ArrayList: class <T> extends List<T> {
      * specified by the minimum capacity argument.
      */
     ensureCapacity: inline func (newSize: SizeT) {
-        if(newSize > capacity) {
-            capacity = newSize * (newSize > 50000 ? 2 : 4)
+        if(newSize > capacity) {            capacity = newSize * (newSize > 50000 ? 2 : 4)
             tmpData := gc_realloc(data, capacity * T size)
             if (tmpData) {
                 data = tmpData
@@ -202,6 +213,32 @@ ArrayList: class <T> extends List<T> {
         data
     }
 
+    /** @return This<T> containing the items from this[min] through (including) this[max-1]  */
+    slice: func (min, max: SSizeT) -> This<T> {
+        if(min < 0) min = _size + min
+        if(min < 0 || min >= _size) OutOfBoundsException new(This, min, _size) throw()
+
+        if(max < 0) max = _size + max
+        if(max < 0 || max >= _size) OutOfBoundsException new(This, max, _size) throw()
+
+        // We use +1 since it's zero based, and we want the *size* instead of the last index
+        retSize := max - min + 1
+
+        ret := This<T> new(retSize)
+        /*for(i in min..(max + 1)) { // Used (max + 1) to compensate for Ranges being exclusive
+            ret add(this[i])
+        }*/
+        memcpy(ret data, data + (min * T size), (retSize) * T size)
+        ret _size = retSize
+        ret capacity = retSize
+
+        ret
+    }
+
+    slice: func ~withRange (r: Range) -> This<T> {
+        slice(r min, r max)
+    }
+
 }
 
 ArrayListIterator: class <T> extends BackIterator<T> {
@@ -214,17 +251,15 @@ ArrayListIterator: class <T> extends BackIterator<T> {
     hasNext?: func -> Bool { index < list size }
 
     next: func -> T {
-        element := list get(index)
         index += 1
-        return element
+        list get(index - 1)
     }
 
     hasPrev?: func -> Bool { index > 0 }
 
     prev: func -> T {
         index -= 1
-        element := list get(index)
-        return element
+        list get(index)
     }
 
     remove: func -> Bool {
@@ -236,6 +271,7 @@ ArrayListIterator: class <T> extends BackIterator<T> {
 }
 
 /* Operators */
+operator [] <T> (list: ArrayList<T>, r: Range) -> ArrayList<T> { list slice(r) }
 operator [] <T> (list: ArrayList<T>, i: Int) -> T { list get(i) }
 operator []= <T> (list: ArrayList<T>, i: Int, element: T) { list set(i, element) }
 operator += <T> (list: ArrayList<T>, element: T) { list add(element) }

@@ -76,8 +76,7 @@ Driver: abstract class {
         modulesDone add(module)
 
         for(use1: Use in module getUses()) {
-            useDef := use1 getUseDef()
-            getFlagsFromUse(useDef, flagsDone, usesDone)
+            getFlagsFromUse(use1 useDef, flagsDone, usesDone)
         }
 
         for(imp: Import in module getAllImports()) {
@@ -137,7 +136,7 @@ Driver: abstract class {
         }
 
         for(req in useDef getRequirements()) {
-            getFlagsFromUse(req getUseDef(), flagsDone, usesDone)
+            getFlagsFromUse(req useDef, flagsDone, usesDone)
         }
 
     }
@@ -157,7 +156,7 @@ Driver: abstract class {
 
     checkBinaryNameCollision: func (name: String) {
         if (File new(name) dir?()) {
-            fprintf(stderr, "Naming conflict (output binary) : There is already a directory called %s.\nTry a different name, e.g. '-o=%s2'\n", name toCString(), name toCString())
+            stderr write("Naming conflict (output binary) : There is already a directory called %s.\nTry a different name, e.g. '-o=%s2'\n" format(name, name))
             CommandLine failure(params)
             exit(1)
         }

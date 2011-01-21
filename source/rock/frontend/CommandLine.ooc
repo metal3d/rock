@@ -3,7 +3,7 @@ import structs/[ArrayList, List, Stack]
 import text/StringTokenizer
 
 import rock/RockVersion
-import Help, Token, BuildParams, AstBuilder
+import Help, Token, BuildParams, AstBuilder, PathList
 import compilers/[Gcc, Clang, Icc, Tcc]
 import drivers/[Driver, CombineDriver, SequenceDriver, MakeDriver, DummyDriver]
 import ../backend/json/JSONGenerator
@@ -18,6 +18,11 @@ system: extern func (command: CString)
 CommandLine: class {
     params: BuildParams
     driver: Driver
+    cCPath := ""
+
+    setCompilerPath: func {
+           if (params compiler != null && cCPath != "") params compiler setExecutable(cCPath)
+    }
 
     init: func(args : ArrayList<String>) {
 
@@ -43,7 +48,8 @@ CommandLine: class {
                     sourcePathOption := arg substring(arg indexOf('=') + 1)
                     tokenizer := StringTokenizer new(sourcePathOption, File pathDelimiter)
                     for (token: String in tokenizer) {
-                        params sourcePath add(token)
+						// rock allows '/' instead of '\' on Win32
+                        params sourcePath add(token replaceAll('/', File separator))
                     }
 
                 } else if (option startsWith?("outpath=")) {
@@ -53,7 +59,7 @@ CommandLine: class {
 
                 } else if (option startsWith?("outlib")) {
 
-                    "Deprecated option %s! Use -staticlib instead. Abandoning.\n" printf(option toCString())
+                    "Deprecated option %s! Use -staticlib instead. Abandoning." printfln(option)
                     exit(1)
 
                 } else if (option startsWith?("staticlib")) {
@@ -75,6 +81,11 @@ CommandLine: class {
                         params dynamiclib = arg substring(idx + 1)
                     }
 
+                } else if (option startsWith?("packagefilter=")) {
+
+                    idx := arg indexOf('=')
+                    params packageFilter = arg substring(idx + 1)
+
                 } else if (option startsWith?("libfolder=")) {
 
                     idx := arg indexOf('=')
@@ -84,7 +95,7 @@ CommandLine: class {
                     params backend = arg substring(arg indexOf('=') + 1)
 
                     if(params backend != "c" && params backend != "json" && params backend != "explain") {
-                        "Unknown backend: %s." format(params backend toCString()) println()
+                        "Unknown backend: %s." format(params backend) println()
                         params backend = "c"
                     }
 
@@ -254,6 +265,7 @@ CommandLine: class {
 
                     params verbose = true
                     params veryVerbose = true
+                    params sourcePath debug = true
 
                 } else if (option == "stats") {
 
@@ -278,7 +290,7 @@ CommandLine: class {
                         case "dummy" =>
                             DummyDriver new(params)
                         case =>
-                            "Unknown driver: %s\n" printf(driverName toCString())
+                            "Unknown driver: %s" printfln(driverName)
                             null
                     }
 
@@ -288,7 +300,7 @@ CommandLine: class {
 
                 } else if (option == "V" || option == "-version" || option == "version") {
 
-                    printf("rock %s, built on %s at %s\n", RockVersion getName() toCString(), ROCK_BUILD_DATE, ROCK_BUILD_TIME)
+                    "rock %s, built on %s at %s" printfln(RockVersion getName(), ROCK_BUILD_DATE, ROCK_BUILD_TIME)
                     exit(0)
 
                 } else if (option == "h" || option == "-help" || option == "help") {
@@ -296,31 +308,32 @@ CommandLine: class {
                     Help printHelp()
                     exit(0)
 
+                } else if(option startsWith?("cc=")) {
+
+                    cCPath = option substring(3)
+                    setCompilerPath()
+
                 } else if (option startsWith?("gcc")) {
-                    if(option startsWith?("gcc=")) {
-                        params compiler = Gcc new(option substring(4))
-                    } else {
-                        params compiler = Gcc new()
-                    }
+
+                    params compiler = Gcc new()
+                    setCompilerPath()
+
                 } else if (option startsWith?("icc")) {
-                    if(option startsWith?("icc=")) {
-                        params compiler = Icc new(option substring(4))
-                    } else {
-                        params compiler = Icc new()
-                    }
+
+                    params compiler = Icc new()
+                    setCompilerPath()
+
                 } else if (option startsWith?("tcc")) {
-                    if(option startsWith?("tcc=")) {
-                        params compiler = Tcc new(option substring(4))
-                    } else {
-                        params compiler = Tcc new()
-                    }
+
+                    params compiler = Tcc new()
                     params dynGC = true
+                    setCompilerPath()
+
                 } else if (option startsWith?("clang")) {
-                    if(option startsWith?("clang=")) {
-                        params compiler = Clang new(option substring(6))
-                    } else {
-                        params compiler = Clang new()
-                    }
+
+                    params compiler = Clang new()
+                    setCompilerPath()
+
                 } else if (option == "onlyparse") {
 
                     driver = null
@@ -352,7 +365,7 @@ CommandLine: class {
 
                 } else {
 
-                    printf("Unrecognized option: %s\n", arg toCString())
+                    "Unrecognized option: %s" printfln(arg)
 
                 }
             } else if(arg startsWith?("+")) {
@@ -397,9 +410,10 @@ CommandLine: class {
             params libfolder = libfolder getPath()
             params sourcePath add(params libfolder)
 
-            if(params verbose) "Building lib for folder %s to name %s\n" printf(params libfolder toCString(), name toCString())
+            if(params verbose) "Building lib for folder %s to name %s" printfln(params libfolder, name)
 
-            dummyModule = Module new("__lib__/%s.ooc" format(name toCString()), ".", params, nullToken)
+            dummyModule = Module new("__lib__/%s.ooc" format(name), ".", params, nullToken)
+            dummyModule dummy = true
             libfolder walk(|f|
                 // sort out links to non-existent destinations.
                 if(!f exists?())
@@ -418,35 +432,42 @@ CommandLine: class {
 
         if(params staticlib != null || params dynamiclib != null) {
             if(modulePaths getSize() != 1 && !params libfolder) {
-                "Error: you can use -staticlib of -dynamiclib only when specifying a unique .ooc file, not %d of them.\n" printf(modulePaths getSize())
+                "Error: you can use -staticlib of -dynamiclib only when specifying a unique .ooc file, not %d of them." printfln(modulePaths getSize())
                 exit(1)
             }
             moduleName := File new(dummyModule ? dummyModule path : modulePaths[0]) name()
             moduleName = moduleName[0..moduleName length() - 4]
             basePath := File new("build", moduleName) getPath()
-            if(params staticlib == "") {
+            if(params staticlib) {
                 params clean = false
                 params defaultMain = false
                 params outPath = File new(basePath, "include")
-                staticExt := ".a"
-                params staticlib = File new(File new(basePath, "lib"), moduleName + staticExt) getPath()
+                
+                if(params staticlib == "") {
+                    staticExt := ".a"
+                    params staticlib = File new(File new(basePath, "lib"), moduleName + staticExt) getPath()
+                }
             }
-            if(params dynamiclib == "") {
+            
+            if(params dynamiclib) {
                 params clean = false
                 params defaultMain = false
                 params outPath = File new(basePath, "include")
-                prefix := "lib"
-                dynamicExt := ".so"
-                // TODO: version blocks for this is evil. What if we want to cross-compile?
-                // besides, it's missing some platforms.
-                version(windows) {
-                    dynamicExt = ".dll"
-                    prefix = ""
+                
+                if(params dynamiclib == "") {
+                    prefix := "lib"
+                    dynamicExt := ".so"
+                    // TODO: version blocks for this is evil. What if we want to cross-compile?
+                    // besides, it's missing some platforms.
+                    version(windows) {
+                        dynamicExt = ".dll"
+                        prefix = ""
+                    }
+                    version(apple) {
+                        dynamicExt = ".dylib"
+                    }
+                    params dynamiclib = File new(File new(basePath, "lib"), prefix + moduleName + dynamicExt) getPath()
                 }
-                version(apple) {
-                    dynamicExt = ".dylib"
-                }
-                params dynamiclib = File new(File new(basePath, "lib"), prefix + moduleName + dynamicExt) getPath()
 
                 // TODO: this is too gcc/Linux-specific: there should be a good way
                 // to abstract that away
@@ -454,7 +475,6 @@ CommandLine: class {
                 params compilerArgs add("-shared")
                 params compilerArgs add("-Wl,-soname," + params dynamiclib)
                 params binaryPath = params dynamiclib
-                //driver = CombineDriver new(params)
                 params libcache = false // libcache is incompatible with combine driver
                 File new(basePath, "lib") mkdirs()
             }
@@ -515,19 +535,19 @@ CommandLine: class {
 
     clean: func {
         // oh that's a hack.
-        system("rm -rf %s" format(params outPath path toCString()) toCString())
+        system("rm -rf %s" format(params outPath path))
     }
 
     cleanHardcore: func {
         clean()
         // oh that's the same hack. Someone implement File recursiveDelete() already.
-        system("rm -rf %s" format(params libcachePath toCString()) toCString())
+        system("rm -rf %s" format(params libcachePath))
     }
 
     parse: func (moduleName: String) -> Int {
         (moduleFile, pathElement) := params sourcePath getFile(moduleName)
         if(!moduleFile) {
-            printf("File not found: %s\n", moduleName toCString())
+            "File not found: %s" printfln(moduleName)
             exit(1)
         }
 
@@ -572,7 +592,7 @@ CommandLine: class {
             )
         }
         module parseImports(null)
-        if(params verbose) printf("\rFinished parsing, now tinkering...                                                   \n")
+        if(params verbose) "\rFinished parsing, now tinkering...                                                   " println()
 
         // phase 2: tinker
         if(!Tinkerer new(params) process(module collectDeps())) failure(params)
@@ -685,4 +705,3 @@ CompilationFailedException: class extends Exception {
         super("Compilation failed!")
     }
 }
-

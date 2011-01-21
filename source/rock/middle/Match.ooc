@@ -109,7 +109,7 @@ Match: class extends Expression {
                                 if(res fatal) {
                                     res throwError(
                                         CantUseMatch new(expr token,
-                                            "You can't use the type match syntax here, can't resolve `%s`" format(fCall toString() toCString())
+                                            "You can't use the type match syntax here, can't resolve `%s`" format(fCall toString())
                                     ))
                                 } else {
                                     res wholeAgain(this, "call can't be resolved, let's forget it")
@@ -134,7 +134,7 @@ Match: class extends Expression {
                             if(fCall getRef() != null) {
                                 returnType := fCall getRef() getReturnType() getName()
                                 if(returnType != "Bool")
-                                    res throwError(WrongMatchesSignature new(expr token, "matches? returns a %s, but it should return a Bool" format(returnType toCString())))
+                                    res throwError(WrongMatchesSignature new(expr token, "matches? returns a %s, but it should return a Bool" format(returnType)))
                                 caze setExpr(fCall)
                             } else {
                                 if (caze getExpr() instanceOf?(BinaryOp)) {
@@ -190,12 +190,16 @@ Match: class extends Expression {
                     res throwError(CouldntReplace new(token, this, varAcc, trail))
                 }
                 for(caze in cases) {
-                    last := caze getBody() last()
-                    if(!last instanceOf?(Expression)) {
-                        res throwError(ExpectedExpression new(last token, "Last statement of a match used an expression should be an expression itself!"))
+                    if(caze getBody() empty?()) {
+                        res throwError(ExpectedExpression new(caze token, "Cases in a Match used an expression should be expressions themselves!"))
+                    } else {
+                        last := caze getBody() last()
+                        if(!last instanceOf?(Expression)) {
+                            res throwError(ExpectedExpression new(last token, "Last statement of a match used an expression should be an expression itself!"))
+                        }
+                        ass := BinaryOp new(varAcc, last as Expression, OpType ass, caze token)
+                        caze getBody() set(caze getBody() lastIndex(), ass)
                     }
-                    ass := BinaryOp new(varAcc, last as Expression, OpType ass, caze token)
-                    caze getBody() set(caze getBody() lastIndex(), ass)
                 }
                 res wholeAgain(this, "just unwrapped")
                 return Response OK

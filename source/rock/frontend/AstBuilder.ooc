@@ -71,7 +71,7 @@ AstBuilder: class {
         }
 
         first = false
-        result := nq_parse(this, modulePath toCString())
+        result := nq_parse(this, modulePath)
         if(result == -1) {
             Exception new(This, "File " +modulePath + " not found") throw()
         }
@@ -124,7 +124,7 @@ AstBuilder: class {
     printCache: static func {
         "==== Cache ====" println()
         cache getKeys() each(|key|
-            "cache %s = %s" format(key toCString(), cache get(key) fullName toCString()) println()
+            "cache %s = %s" format(key, cache get(key) fullName) println()
         )
         "=" times(14) println()
     }
@@ -164,7 +164,7 @@ AstBuilder: class {
     }
 
     onImportNamespace: unmangled(nq_onImportNamespace) func (cnamespace: CString, quantity: Int) {
-        if(params veryVerbose) printf("nq_importnamespace %s\n", cnamespace)
+        if(params veryVerbose) "nq_importnamespace %s" printfln(cnamespace)
         namespace := cnamespace toString()
         nDecl: NamespaceDecl
         if(!module hasNamespace(namespace)) {
@@ -462,7 +462,7 @@ AstBuilder: class {
             // same hash? compare length and then full-string comparison
             word := reservedWords[idx]
             if(word length() == vd getName() length() && word == vd getName()) {
-                params errorHandler onError(ReservedKeywordError new(vd token, "%s is a reserved C99 keyword, you can't use it in a variable declaration" format(vd getName() toCString())))
+                params errorHandler onError(ReservedKeywordError new(vd token, "%s is a reserved C99 keyword, you can't use it in a variable declaration" format(vd getName())))
             }
         }
 
@@ -674,7 +674,7 @@ AstBuilder: class {
 
     onFunctionEnd: unmangled(nq_onFunctionEnd) func -> FunctionDecl {
         fDecl := pop(FunctionDecl)
-        
+
         match(node := peek(Object)) {
             case module =>
                 module addFunction(fDecl)
@@ -823,7 +823,7 @@ AstBuilder: class {
                 }
                 tuple getElements() add(stmt as Expression)
             case =>
-                printf("[gotStatement] Got a %s, don't know what to do with it, parent = %s\n", stmt toString() toCString(), node class name toCString())
+                "[gotStatement] Got a %s, don't know what to do with it, parent = %s\n" printfln(stmt toString(), node class name)
         }
     }
 
@@ -1025,7 +1025,7 @@ AstBuilder: class {
     }
 
     onFloatLiteral: unmangled(nq_onFloatLiteral) func (value: CString) -> FloatLiteral {
-        FloatLiteral new(value toString() replaceAll("_", "") toFloat(), token())
+        FloatLiteral new(value toString() replaceAll("_", ""), token())
     }
 
     onBoolLiteral: unmangled(nq_onBoolLiteral) func (value: Bool) -> BoolLiteral {
@@ -1171,7 +1171,7 @@ AstBuilder: class {
             done = node as Declaration addTypeArg(vDecl)
         }
 
-        if(!done) params errorHandler onError(InternalError new(token(), "Unexpected type argument in a %s declaration!" format(node class name toCString())))
+        if(!done) params errorHandler onError(InternalError new(token(), "Unexpected type argument in a %s declaration!" format(node class name)))
 
     }
 
@@ -1190,7 +1190,7 @@ AstBuilder: class {
     peek: func <T> (T: Class) -> T {
         node := stack peek() as Node
         if(!node instanceOf?(T)) {
-            params errorHandler onError(InternalError new(token(), "Should've peek'd a %s, but peek'd a %s. Stack = %s" format(T name toCString(), node class name toCString(), stackRepr() toCString())))
+            params errorHandler onError(InternalError new(token(), "Should've peek'd a %s, but peek'd a %s. Stack = %s" format(T name, node class name, stackRepr())))
         }
         return node
     }
@@ -1198,7 +1198,7 @@ AstBuilder: class {
     pop: func <T> (T: Class) -> T {
         node := stack pop() as Node
         if(!node instanceOf?(T)) {
-            params errorHandler onError(InternalError new(token(), "Should've pop'd a %s, but pop'd a %s. Stack = %s" format(T name toCString(), node class name toCString(), stackRepr() toCString())))
+            params errorHandler onError(InternalError new(token(), "Should've pop'd a %s, but pop'd a %s. Stack = %s" format(T name, node class name, stackRepr())))
         }
         return node
     }
@@ -1237,7 +1237,7 @@ nq_mangleIdents: unmangled func (string: CString) -> CString            {
     string
 }
 nq_trailingQuest: unmangled func (string: CString) -> CString           { (string toString() + "__quest") toCString() }
-nq_trailingBang:  unmangled func (string: CString) -> CString           { (string toString() + "__bang") toCString() }
+nq_trailingBang:  unmangled func (string: CString) -> CString           { (string toString() + "__bang")  toCString() }
 nq_error: unmangled func (this: AstBuilder, errorID: Int, message: CString, index: Int) {
     msg : String = (message == null) ? null : message toString()
     this error(errorID, msg, index)

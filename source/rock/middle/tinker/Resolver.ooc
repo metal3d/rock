@@ -59,7 +59,7 @@ Resolver: class {
         wholeAgain = false
 
         response := module resolve(Trail new(), this)
-        if(params veryVerbose) printf("[Module] response = %s (wholeAgain = %s)\n", response toString() toCString(), wholeAgain toString() toCString())
+        if(params veryVerbose) "[Module] response = %s (wholeAgain = %s)" printfln(response toString(), wholeAgain toString())
 
         return !response ok() || wholeAgain
     }
@@ -90,7 +90,7 @@ Resolver: class {
         }
 
         if((params veryVerbose && fatal) || params debugLoop) {
-            node token formatMessage("%s : %s because '%s'\n" format(node toString() toCString(), node class name toCString(), reason toCString()), "LOOP") println()
+            node token formatMessage("%s : %s because '%s'\n" format(node toString(), node class name, reason), "LOOP") println()
         }
         wholeAgain = true
     }
@@ -115,7 +115,6 @@ Resolver: class {
         dummyModule := Module new("dummy", ".", params, nullToken)
 
         for (pathElem in params sourcePath getPaths()) {
-
             pathElem walk(|f|
                 // sort out links to non-existent destinations.
                 if(!f exists?())
@@ -130,7 +129,6 @@ Resolver: class {
                 dummyModule addImport(Import new(fullName, nullToken))
                 true
             )
-
         }
 
         params verbose = false

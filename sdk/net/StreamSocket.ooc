@@ -59,6 +59,7 @@ StreamSocket: class extends Socket {
         if(socket connect(descriptor, remote addr(), remote length()) == -1) {
             SocketError new() throw()
         }
+        connected? = true
     }
 
     /**
@@ -156,6 +157,9 @@ StreamSocket: class extends Socket {
         if(bytesRecv == -1) {
             SocketError new() throw()
         }
+        if(bytesRecv == 0) {
+            connected? = false // disconnected!
+        }
         return bytesRecv
     }
 
@@ -181,9 +185,7 @@ StreamSocket: class extends Socket {
      */
     receiveByte: func ~withFlags(flags: Int) -> Char {
         c: Char
-        if(socket recv(descriptor, c&, Char size, flags) == -1) {
-            SocketError new() throw()
-        }
+        receive(c&, 1, 0)
         return c
     }
 
@@ -214,7 +216,7 @@ StreamSocketReader: class extends Reader {
     }
 
     hasNext?: func -> Bool {
-        source available() > 0
+        source connected?
     }
 
     rewind: func(offset: Int) {

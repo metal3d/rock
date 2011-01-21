@@ -14,10 +14,6 @@ currentCoro := mainCoro
 
 atexit(scheduler)
 
-GC_add_roots: extern func (Pointer, Pointer)
-GC_remove_roots: extern func (Pointer, Pointer)
-GC_stackbottom: extern Pointer
-
 scheduler: func {
     mainCoro initializeMainCoro()
 
@@ -45,17 +41,9 @@ scheduler: func {
                 currentCoro = newCoro
 
                 oldCoro startCoro(currentCoro, ||
-                    stackBase := currentCoro stack
-                    stackSize := currentCoro allocatedStackSize
-                    oldStackBase := GC_stackbottom
-                    // Adjust the stackbottom and add our Coro's stack as a root for the GC
-                    GC_stackbottom = stackBase
-                    GC_add_roots(stackBase, stackBase + stackSize)
                     //"Coro started!" println()
                     info c()
                     //"Terminating a coro!" printfln()
-                    GC_stackbottom = oldStackBase
-                    GC_remove_roots(stackBase, stackBase + stackSize)
                     terminate()
                 )
             }
@@ -77,7 +65,7 @@ Channel: class <T> {
     send: func (t: T) {
         //"Sending %d" printfln(t as Int)
         queue add(t)
-        while(queue size() >= 100) {
+        while(queue size >= 100) {
             //"Queue filled, yielding"
             yield()
         }
@@ -130,5 +118,3 @@ go: func (c: Func) {
 make: func <T> (T: Class) -> Channel<T> {
     Channel<T> new()
 }
-
-

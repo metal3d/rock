@@ -187,10 +187,12 @@ Buffer: class extends Iterable<Char> {
     }
 
     append: func ~buf(other: This) {
+        if(!other) return
         append~pointer(other data, other size)
     }
 
     append: func ~str(other: String) {
+        if(!other) return
         append~buf(other _buffer)
     }
 
@@ -378,6 +380,13 @@ Buffer: class extends Iterable<Char> {
             if(data[i] == oldie) data[i] = kiddo
         }
     }
+    
+    /** Transform all characters according to a transformation function */
+    map: func (f: Func (Char) -> Char) {
+        for(i in 0..size) {
+            data[i] = f(data[i])
+        }
+    }
 
     /**
      * Converts all of the characters in this Buffer to lower case.
@@ -538,11 +547,18 @@ Buffer: class extends Iterable<Char> {
     print: func {
         fwrite(data, 1, size, stdout)
     }
+    
+    print: func ~withStream (stream: FStream) {
+        fwrite(data, 1, size, stream)
+    }
 
     /** print *this* followed by a newline. */
     println: func {
-        print()
-        '\n' print()
+        print(stdout); '\n' print(stdout)
+    }
+    
+    println: func ~withStream (stream: FStream) {
+        print(stream); '\n' print(stream)
     }
 
     // TODO make these faster by not simply calling the C API.
@@ -597,7 +613,7 @@ Buffer: class extends Iterable<Char> {
      */
     get: func (index: SSizeT) -> Char {
         if(index < 0) index = size + index
-        if(index >= size) OutOfBoundsException new(This, index, size) throw()
+        if(index < 0 || index >= size) OutOfBoundsException new(This, index, size) throw()
         data[index]
     }
 
@@ -605,8 +621,8 @@ Buffer: class extends Iterable<Char> {
      * @return the index-th character of this string
      */
     set: func (index: SSizeT, value: Char) {
-        if(index < 0) index = size - index
-        if(index >= size) OutOfBoundsException new(This, index, size) throw()
+        if(index < 0) index = size + index
+        if(index < 0 || index >= size) OutOfBoundsException new(This, index, size) throw()
         data[index] = value
     }
 

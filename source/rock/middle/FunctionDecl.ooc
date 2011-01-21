@@ -175,7 +175,7 @@ FunctionDecl: class extends Declaration {
         args each(|e| copy args add(e clone()))
         copy returnType = returnType clone()
 
-        body list each(|e| copy body add(e clone()); "Adding clone of %s to %s" format(e toString() toCString(), copy toString() toCString()) println())
+        body list each(|e| copy body add(e clone()); "Adding clone of %s to %s" format(e toString(), copy toString()) println())
 
         copy vDecl = vDecl
 
@@ -296,12 +296,12 @@ FunctionDecl: class extends Declaration {
                 fullName = name
             } else {
                 if(isMember()) {
-                    fullName = "%s_%s" format(owner getFullName() toCString(), name toCString())
+                    fullName = "%s_%s" format(owner getFullName(), name)
                 } else {
-                    fullName = "%s__%s" format(token module getUnderName() toCString(), name toCString())
+                    fullName = "%s__%s" format(token module getUnderName(), name)
                 }
                 if(suffix != null) {
-                    fullName = "%s_%s" format(fullName toCString(), suffix toCString())
+                    fullName = "%s_%s" format(fullName, suffix)
                 }
             }
         }
@@ -421,7 +421,7 @@ FunctionDecl: class extends Declaration {
         }
 
         if(access debugCondition()) {
-            "Looking for %s in %s, got %d typeArgs" printfln(access toString() toCString(), toString() toCString(), typeArgs size)
+            "Looking for %s in %s, got %d typeArgs" printfln(access toString(), toString(), typeArgs size)
         }
         
         for(typeArg in typeArgs) {
@@ -452,7 +452,7 @@ FunctionDecl: class extends Declaration {
 
     resolve: func (trail: Trail, res: Resolver) -> Response {
 
-        if(debugCondition() || res params veryVerbose) printf("** Resolving function decl %s\n", name toCString())
+        if(debugCondition() || res params veryVerbose) "** Resolving function decl %s" printfln(name)
 
         if(debugCondition()) ("isFatal ? " + res fatal toString()) println()
 
@@ -466,7 +466,7 @@ FunctionDecl: class extends Declaration {
             base := meat getBaseClass(this, true)
 
             if(base != null) {
-                finalScore: Int
+                finalScore := 0
                 parent := base getFunction(name, suffix ? suffix : "", null, false, finalScore&)
                 if(finalScore == -1) {
                     res wholeAgain(this, "Something's not resolved, need base getFunction()")
@@ -509,10 +509,10 @@ FunctionDecl: class extends Declaration {
         if(debugCondition()) "Handling the args"
 
         for(arg in args) {
-            if(debugCondition()) "Handling arg %s" format(arg toString() toCString()) println()
+            if(debugCondition()) "Handling arg %s" format(arg toString()) println()
             response := arg resolve(trail, res)
             if(!response ok()) {
-                if(debugCondition() || res params veryVerbose) printf("Response of arg %s = %s\n", arg toString() toCString(), response toString() toCString())
+                if(debugCondition() || res params veryVerbose) "Response of arg %s = %s" printfln(arg toString(), response toString())
                 trail pop(this)
                 return response
             }
@@ -523,7 +523,8 @@ FunctionDecl: class extends Declaration {
         isClosure := name empty?()
 
         if (isClosure) {
-            if (!_unwrappedACS && !argumentsReady()) {
+            //if (!_unwrappedACS && !argumentsReady()) {
+            if (!_unwrappedACS) {
                 if (!unwrapACS(trail, res)) {
                     trail pop(this)
                     return Response OK
@@ -531,7 +532,7 @@ FunctionDecl: class extends Declaration {
             }
             args each(| arg |
                 if (arg getType() == null || !arg getType() isResolved()) {
-                    "Looping because of arg %s" format(arg toString() toCString()) println()
+                    "Looping because of arg %s" format(arg toString()) println()
                     res wholeAgain(this, "need arg type for the ref")
                     return Response OK
                 }
@@ -543,7 +544,7 @@ FunctionDecl: class extends Declaration {
         for(typeArg in typeArgs) {
             response := typeArg resolve(trail, res)
             if(!response ok()) {
-                if(debugCondition() || res params veryVerbose) printf("Response of typeArg %s = %s\n", typeArg toString() toCString(), response toString() toCString())
+                if(debugCondition() || res params veryVerbose) "Response of typeArg %s = %s" printfln(typeArg toString(), response toString())
                 trail pop(this)
                 return response
             }
@@ -554,7 +555,7 @@ FunctionDecl: class extends Declaration {
         {
             response := returnType resolve(trail, res)
             if(!response ok()) {
-                if(debugCondition() || res params veryVerbose) printf("))))))) For %s, response of return type %s = %s\n", toString() toCString(), returnType toString() toCString(), response toString() toCString())
+                if(debugCondition() || res params veryVerbose) "))))))) For %s, response of return type %s = %s" printfln(toString(), returnType toString(), response toString())
                 trail pop(this)
                 return response
             }
@@ -585,14 +586,14 @@ FunctionDecl: class extends Declaration {
 
         if(inlined) {
             trail pop(this)
-            "%s is inlining, not resolving further" format(toString() toCString()) println()
+            "%s is inlining, not resolving further" format(toString()) println()
             return Response OK
         }
 
         {
             response := body resolve(trail, res)
             if(!response ok()) {
-                if(debugCondition() || res params veryVerbose) printf("))))))) For %s, response of body = %s\n", toString() toCString(), response toString() toCString())
+                if(debugCondition() || res params veryVerbose) "))))))) For %s, response of body = %s" printfln(toString(), response toString())
                 trail pop(this)
                 res wholeAgain(this, "body wanna LOOP")
                 return Response OK
@@ -609,13 +610,13 @@ FunctionDecl: class extends Declaration {
                 if(isVoid()) {
                     returnType = BaseType new("Int", token)
                     body add(Return new(IntLiteral new(0, nullToken), nullToken))
-                    res wholeAgain(this, "because changed returnType to %s" format(returnType toString() toCString()))
+                    res wholeAgain(this, "because changed returnType to %s" format(returnType toString()))
                 }
             }
 
             response := autoReturn(trail, res, this, body, returnType)
             if(!response ok()) {
-                if(debugCondition() || res params veryVerbose) printf("))))))) For %s, response of autoReturn = %s\n", toString() toCString(), response toString() toCString())
+                if(debugCondition() || res params veryVerbose) "))))))) For %s, response of autoReturn = %s" printfln(toString(), response toString())
                 trail pop(this)
                 return response
             }
@@ -664,36 +665,55 @@ FunctionDecl: class extends Declaration {
                     owner removeFunction(this). addFunction(this)
                 }
             } else {
-                res throwError(UnresolvedCall new(token, superCall, "There is no such super-func in %s!" format(superTypeDecl toString() toCString())))
+                res throwError(UnresolvedCall new(token, superCall, "There is no such super-func in %s!" format(superTypeDecl toString())))
             }
         }
 
-        if(name == "main" && owner == null) {
-            if(args getSize() == 1 && args first() getType() getName() == "ArrayList") {
-                arg := args first()
-                args clear()
-                argc := Argument new(BaseType new("Int", arg token), "argc", arg token)
-                argv := Argument new(PointerType new(BaseType new("CString", arg token), arg token), "argv", arg token)
-                args add(argc)
-                args add(argv)
+       if(name == "main" && owner == null) {
+            // TODO: move me out of middle/ !!
+            
+            match (args getSize()) {
+                case 1 => {
+                    if (args first() getType() getName() == "ArrayList") {
+                        arg := args first()
+                        args clear()
+                        argc := Argument new(BaseType new("Int", arg token), "argc", arg token)
+                        argv := Argument new(PointerType new(BaseType new("CString", arg token), arg token), "argv", arg token)
+                        args add(argc)
+                        args add(argv)
 
-                constructCall := FunctionCall new("strArrayListFromCString", arg token)
-                constructCall args add(VariableAccess new(argc, arg token)) \
-                                  .add(VariableAccess new(argv, arg token))
+                        constructCall := FunctionCall new("strArrayListFromCString", arg token)
+                        constructCall args add(VariableAccess new(argc, arg token)) \
+                                          .add(VariableAccess new(argv, arg token))
 
-/*
-                constructCall := FunctionCall new(VariableAccess new(arg getType(), arg token), "new", arg token)
-                constructCall setSuffix("withData")
-                constructCall args add(VariableAccess new(argv, arg token)) \
-                                  .add(VariableAccess new(argc, arg token))
-                                */
+                        vdfe := VariableDecl new(null, arg getName(), constructCall, token)
+                        body add(0, vdfe)
+                    }
+                }
+                case 2 => {
+                    // Replace (argc: Int, argv: String*) with (argc: Int, argv1: CString) 
+                    // and assign argv to the "String" version of argv1
+                    // argv := cStringPtrToStringPtr(argv1, argc)
 
-                vdfe := VariableDecl new(null, arg getName(), constructCall, token)
-                body add(0, vdfe)
+                    if (args get(0) getType() getName() == "Int" && args get(1) getType() getName() == "String") { 
+                        arg := args get(1)
+                        pseudoArgv := BaseType new("CString", arg token)
+                        argv := Argument new(PointerType new(pseudoArgv, arg token), generateTempName("argv"), arg token)
+                        argvAccess := VariableAccess new(argv, argv token)
+                        argcAccess := VariableAccess new(args get(0), args get(0) token)
+                        constructCall := FunctionCall new("cStringPtrToStringPtr", arg token)
+                        constructCall args add(argvAccess)
+                        constructCall args add(argcAccess) 
+
+                        myArgv := VariableDecl new(null, "argv", constructCall, nullToken)
+                        args[1] = argv
+                        body add(0, myArgv)
+                    }
+                }
             }
         }
-
-        if (isClosure) {
+        
+	    if (isClosure) {
             if(countdown > 0) {
                 countdown -= 1
                 res wholeAgain(this, "countdown!")
@@ -714,13 +734,13 @@ FunctionDecl: class extends Declaration {
                 _unwrappedACS = true
                 return true
             } else {
-                res throwError(InternalError new(token, "Got an ACS without any function-call. THIS IS NOT SUPPOSED TO HAPPEN\ntrail= %s" format(trail toString() toCString())))
+                res throwError(InternalError new(token, "Got an ACS without any function-call. THIS IS NOT SUPPOSED TO HAPPEN\ntrail= %s" format(trail toString())))
             }
         }
         parentCall := trail get(fCallIndex) as FunctionCall
         parentFunc := parentCall getRef()
 
-        if (!parentFunc) {
+        if (!parentFunc || parentCall refScore < 0) {
             res wholeAgain(this, "Need ACS reference.")
             return false
         }
@@ -735,7 +755,9 @@ FunctionDecl: class extends Declaration {
             callExprTypeArgs := parentCall expr getType() getTypeArgs()
             if(callExprTypeArgs) {
                 for(typeArg in parentFunc getOwner() typeArgs) {
-                    body add(0, VariableDecl new(null, typeArg getName(), callExprTypeArgs get(j), token))
+                    helperDecl := VariableDecl new(null, typeArg getName(), callExprTypeArgs get(j), token)
+                    helperDecl externName = "" // declare it as extern so it doesn't get written
+                    body add(0, helperDecl)
                     j += 1
                 }
             }
@@ -744,20 +766,32 @@ FunctionDecl: class extends Declaration {
         ind := parentCall args indexOf(this)
 
         if (ind == -1) {
-            res throwError(InternalError new(token, "[ACS]: Can't find ´this´ in the call's arguments.\ntrail = %s" format(trail toString() toCString())))
+            res throwError(InternalError new(token, "[ACS]: Can't find `this` in the call's arguments.\ntrail = %s" format(trail toString())))
         }
 
-        funcPointer := parentFunc args[ind] getType() as FuncType
-
-        if (!funcPointer) {
-            res wholeAgain(this, "Missing type informantion in the function pointer.")
+		if(ind >= parentFunc args size) {
+			res wholeAgain(this, "Invalid argument index - call candidate probably doesn't match")
+			return false
+		}
+        
+        argType := parentFunc args[ind] getType()
+        if (!argType || argType class != FuncType) {
+            res wholeAgain(this, "Missing type information in the function pointer.")
             return false
         }
+        funcPointer := argType as FuncType
+
         ix := 0
 
-        fScore: Int
+        fScore := 0
         needTrampoline := false
 
+        // infer return type 
+        if(funcPointer returnType) {
+            returnType = funcPointer returnType
+        }
+
+        // infer arg types
         for (fType in funcPointer argTypes) {
             if (!fType isResolved()) {
                 res wholeAgain(this, "Can't figure out the type of the argument.")
@@ -766,10 +800,6 @@ FunctionDecl: class extends Declaration {
             if (fType isGeneric()) needTrampoline = true
             args get(ix) type = fType
             ix += 1
-        }
-
-        if(funcPointer returnType) {
-            returnType = funcPointer returnType
         }
 
         if(funcPointer typeArgs) for(typeArg in funcPointer typeArgs) {
@@ -909,7 +939,7 @@ FunctionDecl: class extends Declaration {
                         case          =>
 
                             if(!arg getType() isPointer() && !arg getType() getGroundType() isPointer() && !arg getType() isGeneric() && !arg getType() getRef() instanceOf?(ClassDecl)) {
-                                res throwError(InternalError new(arg token, "Unknown closure arg type %s\n" format(arg getType() toString() toCString())))
+                                res throwError(InternalError new(arg token, "Unknown closure arg type %s\n" format(arg getType() toString())))
                             }
                             'P'
                     }
@@ -954,6 +984,43 @@ FunctionDecl: class extends Declaration {
 
                 // create the context struct's cover
                 ctxStruct := CoverDecl new(name + "_ctx", token)
+
+                // look for versioned nodes or VersionBlocks in the trail. If we're using
+                // a closure in a versioned context, we don't want the context struct to appear
+                // in any other context - it results in gcc errors. See #197.
+                // The same `ctxVersion` instance is used for the thunk function later.
+                ctxVersion: VersionSpec
+                for(i in 1..trail size) {
+                    node := trail peek(i)
+                    verzion: VersionSpec
+                    // There are several types of versioned nodes.
+                    if(node instanceOf?(TypeDecl) && node as TypeDecl verzion != null) {
+                        // TypeDecl?
+                        verzion = node as TypeDecl verzion
+                    } else if(node instanceOf?(FunctionDecl) && node as FunctionDecl verzion != null) {
+                        // Or a versioned FunctionDecl?
+                        verzion = node as FunctionDecl verzion
+                    } else if(node instanceOf?(VersionBlock)) {
+                        // Or, of course, a version block.
+                        verzion = node as VersionBlock spec
+                    } else {
+                        // No? Okay. Skip this.
+                        continue
+                    }
+                    // There is a version somewhere - merge the specs.
+                    if(ctxVersion == null) {
+                        ctxVersion = verzion clone()
+                    } else {
+                        ctxVersion = VersionAnd new(
+                            ctxVersion,
+                            verzion clone(),
+                            node token
+                        )
+                    }
+                }
+
+                if(ctxVersion != null)
+                    ctxStruct setVersion(ctxVersion)
 
                 // add corresponding variables to the context struct
                 // and to the struct initializer for the context
@@ -1001,6 +1068,12 @@ FunctionDecl: class extends Declaration {
                 thunk := FunctionDecl new(getName() + "_thunk", token)
                 thunk typeArgs addAll(typeArgs)
                 thunk args addAll(args)
+                thunk returnType = returnType
+
+                // The thunk might have to be versioned, too.
+                if(ctxVersion != null)
+                    thunk setVersion(ctxVersion)
+
                 ctxArg := VariableDecl new(ReferenceType new(ctxStruct getInstanceType(), token), "__context__", token)
                 thunk args add(ctxArg)
 
@@ -1103,7 +1176,7 @@ FunctionRedefinition: class extends Error {
     first, second: FunctionDecl
 
     init: func (=first, =second) {
-        message = second token formatMessage("Redefinition of '%s'%s" format(first getName() toCString(), first verzion ? (" in version " + first verzion toString()) toCString() : "" toCString()), "[INFO]") + '\n' +
+        message = second token formatMessage("Redefinition of '%s'%s" format(first getName(), first verzion ? (" in version " + first verzion toString()) : ""), "[INFO]") + '\n' +
                   first  token formatMessage("\n...first definition was here: ", "[ERROR]")
     }
 
@@ -1112,4 +1185,3 @@ FunctionRedefinition: class extends Error {
     }
 
 }
-

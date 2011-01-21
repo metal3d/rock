@@ -62,8 +62,8 @@ String: class extends Iterable<Char> {
         result toString()
     }
 
-    append: func ~str(other: This) -> This{
-        assert(other != null)
+    append: func ~str (other: This) -> This {
+        if(!other) return this
         result := _buffer clone(size + other size)
         result append (other _buffer)
         result toString()
@@ -119,27 +119,25 @@ String: class extends Iterable<Char> {
     }
 
     replaceAll: func ~char(oldie, kiddo: Char) -> This {
-        result := _buffer clone()
-        result replaceAll~char(oldie, kiddo)
-        result toString()
+        (_buffer clone()) replaceAll~char(oldie, kiddo). toString()
+    }
+    
+    map: func (f: Func (Char) -> Char) -> This {
+        (_buffer clone()) map(f). toString()
     }
 
-    _bufArrayListToStrArrayList: func ( x : ArrayList<Buffer> ) -> ArrayList<This> {
+    _bufArrayListToStrArrayList: func (x: ArrayList<Buffer>) -> ArrayList<This> {
         result := ArrayList<This> new( x size )
-        for (i in x) result add ( i toString() )
+        for (i in x) result add (i toString())
         result
     }
 
     toLower: func -> This {
-        result := _buffer clone()
-        result toLower()
-        result toString()
+        (_buffer clone()) toLower(). toString()
     }
 
     toUpper: func  -> This{
-        result := _buffer clone()
-        result toUpper()
-        result toString()
+        (_buffer clone()) toUpper(). toString()
     }
 
     indexOf: func ~char (c: Char, start: SSizeT = 0) -> SSizeT { _buffer indexOf(c, start) }
@@ -237,6 +235,8 @@ String: class extends Iterable<Char> {
     print: func { _buffer print() }
 
     println: func { if(_buffer != null) _buffer println() }
+    
+    println: func ~withStream (stream: FStream) { if(_buffer != null) _buffer println(stream) }
 
     toInt: func -> Int                       { _buffer toInt() }
     toInt: func ~withBase (base: Int) -> Int { _buffer toInt~withBase(base) }
@@ -266,7 +266,7 @@ String: class extends Iterable<Char> {
         _buffer backIterator()
     }
 
-    format: final func ~str (...) -> This {
+    cformat: final func ~str (...) -> This {
         list: VaList
         va_start(list, this)
         numBytes := vsnprintf(null, 0, _buffer data, list)
@@ -279,23 +279,6 @@ String: class extends Iterable<Char> {
         va_end(list)
         
         new(copy)
-    }
-
-    printf: final func ~str (...) -> Int {
-        list: VaList
-        va_start(list, this )
-        retVal := vprintf(_buffer data, list)
-        va_end(list)
-        retVal
-    }
-
-    printfln: final func ~str (...) -> Int {
-        list: VaList
-        va_start(list, this )
-        retVal := vprintf(_buffer data, list)
-        va_end(list)
-        fputc('\n', stdout)
-        retVal
     }
 
     toCString: func -> CString { _buffer data as CString }
@@ -380,4 +363,15 @@ strArrayListFromCString: func (argc: Int, argv: Char**) -> ArrayList<String> {
 
 strArrayListFromCString: func~hack (argc: Int, argv: String*) -> ArrayList<String> {
     strArrayListFromCString(argc, argv as Char**)
+}
+
+cStringPtrToStringPtr: func (cstr: CString*, len: SizeT) -> String* {
+    // Mostly to allow main to accept String*
+    // func-name sucks, I am open to all suggestions 
+
+    toRet: String* = gc_malloc(Pointer size * len) // otherwise the pointers are stack-allocated 
+    for (i in 0..len) {
+        toRet[i] = makeStringLiteral(cstr[i], cstr[i] length())
+    }
+    toRet
 }

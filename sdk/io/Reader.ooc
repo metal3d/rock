@@ -3,13 +3,13 @@
    The reader interface provides a medium-indendant way to read characters
    from a source, e.g. a file, a string, an URL, etc.
 
-   :author: Amos Wenger (nddrylliog)
-   :author: Scott Olson (tsion / _scott)
-   :author: Joshua Roesslein (joshthecoder)
+   @author Amos Wenger (nddrylliog)
+   @author Scott Olson (tsion / _scott)
+   @author Joshua Roesslein (joshthecoder)
  */
 Reader: abstract class {
 
-    /** Position in the stream. Not suppoted by all reader types */
+    /** Position in the stream. Not supported by all reader types */
     marker: Long
 
     /**
@@ -37,7 +37,22 @@ Reader: abstract class {
             // FIXME this behaviour would lead to errors when reading a binary file
             // for some reason, some files end with the ASCII character 8, ie. BackSpace.
             // we definitely don't want that to end up in the String.
-            if(c == end || (!hasNext?() && c == 8)) break
+            if(c == end || (!hasNext?() && c == 8)) {
+				break
+			}
+            sb append(c)
+        }
+        return sb toString()
+    }
+    
+    readWhile: func ~filter (filter: Func(Char) -> Bool) -> String {
+        sb := Buffer new(1024) // let's be pragmatic
+        while(hasNext?()) {
+            c := read()
+            if(!filter(c)) {
+                rewind(1)
+                break
+            }
             sb append(c)
         }
         return sb toString()
@@ -56,6 +71,18 @@ Reader: abstract class {
         while(hasNext?()) {
             c := read()
             if(c == end) break
+        }
+    }
+    
+    skipUntil: func ~str (end: String) {
+        while(hasNext?()) {
+            c := read()
+            i := 0
+            while(c == end[i]) {
+                c = read()
+                i += 1
+                if(i >= end size) return // caught it!
+            }
         }
     }
 
@@ -133,7 +160,7 @@ Reader: abstract class {
     /**
        Attempt to rewind this stream by the given offset.
      */
-    rewind: abstract func (offset: Int)
+    rewind: abstract func (offset: Int) -> Bool
 
     /**
        Set the mark of this stream to the current position,

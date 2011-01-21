@@ -132,7 +132,7 @@ VariableAccess: class extends Expression {
     resolve: func (trail: Trail, res: Resolver) -> Response {
 
         if(debugCondition()) {
-            "%s is of type %s" printfln(name toCString(), getType() ? getType() toString() toCString() : "(nil)" toCString())
+            "%s is of type %s" printfln(name, getType() ? getType() toString() : "(nil)")
         }
 
         trail onOuter(FunctionDecl, |fDecl|
@@ -175,7 +175,7 @@ VariableAccess: class extends Expression {
                 //printf("Null ref and non-null expr (%s), looking in type %s\n", expr toString(), exprType toString())
                 typeDecl := exprType getRef()
                 if(!typeDecl) {
-                    if(res fatal) res throwError(UnresolvedType new(expr token, expr getType(), "Can't resolve type %s" format(expr getType() toString() toCString())))
+                    if(res fatal) res throwError(UnresolvedType new(expr token, expr getType(), "Can't resolve type %s" format(expr getType() toString())))
                     res wholeAgain(this, "unresolved access, looping")
                     return Response OK
                 }
@@ -270,8 +270,13 @@ VariableAccess: class extends Expression {
                     }
                     // 1.) extern C functions don't accept a Closure_struct
                     // 2.) If ref is not a FDecl, it's probably already "closured" and doesn't need to be wrapped a second time
-                    if (!fDecl isExtern() && ref instanceOf?(FunctionDecl))
+                    if (!fDecl isExtern() && ref instanceOf?(FunctionDecl)) {
+			if(fDecl args size <= ourIndex) {
+			    res wholeAgain(this, "bad index for ref")
+			    return Response OK
+			}
                         closureType = fDecl args get(ourIndex) getType()
+		    }
 
                 } elseif (parent instanceOf?(BinaryOp)) {
                     binOp := parent as BinaryOp
@@ -336,14 +341,14 @@ VariableAccess: class extends Expression {
                 subject := this
                 if(reverseExpr && _staticFunc && name == "this") {
                     res throwError(InvalidAccess new(this,
-                        "Can't access instance variable '%s' from static function '%s'!" format(reverseExpr getName() toCString(), _staticFunc getName() toCString())
+                        "Can't access instance variable '%s' from static function '%s'!" format(reverseExpr getName(), _staticFunc getName())
                     ))
                 }
                 
                 if(res params veryVerbose) {
                     println("trail = " + trail toString())
                 }
-                msg := "Undefined symbol '%s'" format(subject toString() toCString())
+                msg := "Undefined symbol '%s'" format(subject toString())
                 if(res params helpful) {
                     similar := subject findSimilar(res)
                     if(similar) {
@@ -353,8 +358,8 @@ VariableAccess: class extends Expression {
                 res throwError(UnresolvedAccess new(subject, msg))
             }
             if(res params veryVerbose) {
-                printf("     - access to %s%s still not resolved, looping (ref = %s)\n", \
-                expr ? (expr toString() + "->")  toCString() : "" toCString(), name toCString(), ref ? ref toString() toCString() : "(nil)" toCString())
+                "     - access to %s%s still not resolved, looping (ref = %s)" printfln(\
+                expr ? (expr toString() + "->")  : "", name, ref ? ref toString() : "(nil)")
             }
             res wholeAgain(this, "Couldn't resolve varacc")
         }

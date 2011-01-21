@@ -6,7 +6,7 @@ __FUNCTION__: extern CString
 
 strcmp: extern func (Char*, Char*) -> Int
 strncmp: extern func (Char*, Char*, Int) -> Int
-strstr: extern func (Char*, Char*)
+strstr: extern func (Char*, Char*) -> Char*
 strlen:  extern func (Char*) -> Int
 
 strtol:  extern func (Char*, Pointer, Int) -> Long
@@ -117,11 +117,20 @@ Char: cover from char {
     print: func {
         fputc(this, stdout)
     }
+    
+    print: func ~withStream (stream: FStream) {
+        fputc(this, stream)
+    }
 
     /** write this character to stdout, followed by a newline */
     println: func {
         fputc(this, stdout)
         fputc('\n', stdout)
+    }
+    
+    println: func ~withStream (stream: FStream) {
+        fputc(this, stream)
+        fputc('\n', stream)
     }
 
     containedIn?: func(s : String) -> Bool {
@@ -198,5 +207,3 @@ operator == (str1: CString, str2: CString) -> Bool {
 operator != (str1: CString, str2: CString) -> Bool {
     !(str1 == str2)
 }
-
-

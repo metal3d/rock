@@ -62,9 +62,9 @@ VariableDecl: class extends Declaration {
 
     toString: func -> String {
         "%s : %s%s" format(
-            name toCString(),
-            type ? type toString()  toCString(): "<unknown type>" toCString(),
-            expr ? (" = " + expr toString()) toCString() : "" toCString()
+            name,
+            type ? type toString() : "<unknown type>",
+            expr ? (" = " + expr toString()) : ""
         )
     }
 
@@ -86,7 +86,7 @@ VariableDecl: class extends Declaration {
     setConst: func (=isConst) {}
 
     isProto: func -> Bool { isProto }
-    setProto: func (=isProto) { "%s is now proto!" format(name toCString()) println() }
+    setProto: func (=isProto) { "%s is now proto!" format(name) println() }
 
     isGlobal: func -> Bool { isGlobal }
     setGlobal: func (=isGlobal) {}
@@ -121,7 +121,7 @@ VariableDecl: class extends Declaration {
                 if(!isGlobal()) {
                     fullName = name
                 } else {
-                    fullName = "%s__%s" format(token module getUnderName() toCString(), name toCString())
+                    fullName = "%s__%s" format(token module getUnderName(), name)
                 }
             }
         }
@@ -143,7 +143,7 @@ VariableDecl: class extends Declaration {
         trail push(this)
 
         if(debugCondition() || res params veryVerbose) {
-            printf("Resolving variable decl %s\n", toString() toCString())
+            "Resolving variable decl %s\n" printfln(toString())
         }
 
         if(expr) {
@@ -154,7 +154,7 @@ VariableDecl: class extends Declaration {
                 return response
             }
         }
-
+        
         if(type == null && expr != null) {
             // infer the type
             type = expr getType()
@@ -164,7 +164,7 @@ VariableDecl: class extends Declaration {
                 return Response OK
             }
             if(debugCondition()) {
-                " >>> Just inferred type %s of %s from expr %s" format(type toString() toCString(), toString() toCString(), expr toString() toCString()) println()
+                " >>> Just inferred type %s of %s from expr %s" format(type toString(), toString(), expr toString()) println()
             }
         }
 
@@ -173,7 +173,7 @@ VariableDecl: class extends Declaration {
                 ("For " + toString() + ", resolving type " + type toString() + ", of type " + type class name) println()
             }
             response := type resolve(trail, res)
-            if(debugCondition()) "Done resolving the type, ref = %s" printfln(type getRef() ? type getRef() toString() toCString() : "nil" toCString())
+            if(debugCondition()) "Done resolving the type, ref = %s" printfln(type getRef() ? type getRef() toString() : "nil")
             if(!response ok()) {
                 trail pop(this)
                 return response
@@ -188,6 +188,23 @@ VariableDecl: class extends Declaration {
                 return response
             }
             if(debugCondition()) "Done resolving the fDecl" println()
+        }
+
+        // Check if the expression's type inherits from our type 
+        // and add a Cast in that case. (Fixes compiler warnings.)
+        // Example: "a: Node = EmptyNode new()
+        // => "a: Node = EmptyNode new() as Node
+                 
+        if (type && expr) {
+            exprType := expr getType()
+            if (!exprType) {
+                trail pop(this)
+                res wholeAgain(this, "Need type of an Expression.")
+                return Response OK
+            }
+            if (exprType inheritsFrom?(type)) {
+                expr = Cast new(expr, type, token)
+            }
         }
 
         trail pop(this)
@@ -421,7 +438,7 @@ VariableDeclTuple: class extends VariableDecl {
                         }
                         if(element as VariableAccess getName() != "_") bad = true
                     }
-                    if(bad) res throwError(TupleMismatch new(tuple token, "Tuple variable declaration doesn't match return type %s of function %s" format(returnType toString() toCString(), fCall getName() toCString())))
+                    if(bad) res throwError(TupleMismatch new(tuple token, "Tuple variable declaration doesn't match return type %s of function %s" format(returnType toString(), fCall getName())))
                 }
 
                 j := 0
@@ -462,5 +479,3 @@ TupleMismatch: class extends Error {
 IncompatibleElementInTupleVarDecl: class extends Error {
     init: super func ~tokenMessage
 }
-
-

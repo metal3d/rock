@@ -58,13 +58,13 @@ EnumDecl: class extends TypeDecl {
                         case floatLit: FloatLiteral =>
                             FloatLiteral new(match incrementOper {
                                 case '+' =>
-                                    floatLit value + incrementStep as Float
+                                    (floatLit value + incrementStep as Float) toString()
                                 case '*' =>
-                                    floatLit value * incrementStep as Float
+                                    (floatLit value * incrementStep as Float) toString()
                             }, floatLit token)
                         case =>
                             token module params errorHandler onError(ImpossibleIncrement new(element token,
-                                "It's impossible to increment implicitly elements of type %s!" format(fromType toString() toCString())))
+                                "It's impossible to increment implicitly elements of type %s!" format(fromType toString())))
                             return
                             null
                 }
