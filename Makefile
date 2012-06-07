@@ -1,12 +1,13 @@
-.PHONY: all clean mrproper prepare_bootstrap bootstrap install rescue backup
+.PHONY: all clean mrproper prepare_bootstrap bootstrap install download-bootstrap rescue backup
 PARSER_GEN=greg
 NQ_PATH=source/rock/frontend/NagaQueen.c
 DATE=$(shell date +%Y-%m-%d)
 TIME=$(shell date +%H:%M)
 OOC_WARN_FLAGS?=+-w
-OOC_OWN_FLAGS=-sourcepath=source -v +-O0 -g -ignoredefine=ROCK_BUILD_ ${OOC_WARN_FLAGS}
+OOC_OWN_FLAGS=--sourcepath=source -v +-O0 -g --ignoredefine=ROCK_BUILD_ ${OOC_WARN_FLAGS}
 
-CC?=gcc
+# used to be CC?=gcc, but that breaks on mingw where CC is set to 'cc' apparently
+CC=gcc
 PREFIX?=/usr
 MAN_INSTALL_PATH?=/usr/local/man/man1
 BIN_INSTALL_PATH?=${PREFIX}/bin
@@ -45,13 +46,21 @@ prepare_bootstrap:
 	@echo "Preparing boostrap (in build/ directory)"
 	rm -rf build/
 	${OOC} -driver=make -sourcepath=source -outpath=c-source rock/rock -o=../bin/c_rock c-source/${NQ_PATH} -v -g +-w
-	sed s/-w.*/-w\ -DROCK_BUILD_DATE=\\\"\\\\\"bootstrapped\\\\\"\\\"\ -DROCK_BUILD_TIME=\\\"\\\\\"\\\\\"\\\"/ -i build/Makefile
+	
+	# Don't use `sed -i`. That breaks on FreeBSD, and likely other systems as well.
+	sed s/-w.*/-w\ -DROCK_BUILD_DATE=\\\"\\\\\"bootstrapped\\\\\"\\\"\ -DROCK_BUILD_TIME=\\\"\\\\\"\\\\\"\\\"/ build/Makefile > build/Makefile.tmp
+	rm build/Makefile
+	mv build/Makefile.tmp build/Makefile
+	
 	cp ${NQ_PATH} build/c-source/${NQ_PATH}
 	@echo "Done!"
 
+boehmgc:
+	cd libs && $(MAKE)
+
 # For c-source based rock releases, 'make bootstrap' will compile a version
 # of rock from the C sources in build/, then use that version to re-compile itself
-bootstrap:
+bootstrap: boehmgc 
 ifneq ($(IS_BOOTSTRAP),)
 	@echo "Creating bin/ in case it does not exist."
 	mkdir -p bin/
@@ -84,16 +93,28 @@ self: .libs/NagaQueen.o
 backup:
 	cp bin/rock bin/safe_rock
 
-# Attempt to grab a rock bootstrap from Alpaca and recompile
-rescue:
-	git pull
+download-bootstrap:
 	rm -rf build/
-	wget http://commondatastorage.googleapis.com/rock-linux/rock-bootstrap-only.tar.bz2 -O - | tar xjvmp
+	# Note: ./utils/downloader tries curl, ftp, and then wget.
+	#        GNU ftp will _not_ work: it does not accept a url as an argument.
+	./utils/downloader.sh http://www.fileville.net/ooc/bootstrap.tar.bz2 | tar xjvmf - 1>/dev/null
+	if [ ! -e build ]; then cp -rfv rock-*/build ./; fi
+
+# Attempt to grab a rock bootstrap from Alpaca and recompile
+rescue: download-bootstrap
 	$(MAKE) clean bootstrap
 
 # Compile rock with the backup'd version of itself
 safe:
 	OOC=bin/safe_rock $(MAKE) self
+
+bootstrap_tarball:
+ifeq ($(VERSION),)
+	@echo "You must specify VERSION. Generates rock-VERSION-bootstrap-only.tar.bz2"
+else
+	$(MAKE) prepare_bootstrap
+	tar cjvfm rock-${VERSION}-bootstrap-only.tar.bz2 build
+endif
 
 # Clean all temporary files that may make a build fail
 clean:

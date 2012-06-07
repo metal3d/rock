@@ -1,24 +1,24 @@
 /**
     Base exception which all networking errors extend.
  */
-NetError: class extends OSException {}
+NetError: class extends OSException { init: func { super() }}
 
 /**
     The address string provided is invalid.
  */
-InvalidAddress: class extends NetError {}
+InvalidAddress: class extends NetError { init: func { super() }}
 
 /**
     A DNS error occured while performing a lookup.
  */
-DNSError: class extends NetError {}
+DNSError: class extends NetError { init: func { super() }}
 
 /**
     A Socket error occured.
  */
-SocketError: class extends NetError {}
+SocketError: class extends NetError { init: func { super() }}
 
 /**
     A Timeout occored.
  */
-TimeoutError: class extends NetError {}
+TimeoutError: class extends NetError { init: func { super() }}

@@ -2,7 +2,7 @@ import structs/ArrayList
 import ../frontend/[Token, BuildParams]
 import Visitor, Expression, VariableDecl, Declaration, Type, Node,
        OperatorDecl, FunctionCall, Import, Module, BinaryOp,
-       VariableAccess, AddressOf, ArrayCreation, TypeDecl, Argument
+       VariableAccess, AddressOf, ArrayCreation, TypeDecl, Argument, Scope
 import tinker/[Resolver, Response, Trail, Errors]
 
 ArrayAccess: class extends Expression {
@@ -49,6 +49,12 @@ ArrayAccess: class extends Expression {
     resolve: func (trail: Trail, res: Resolver) -> Response {
 
         if(res fatal && type == null) {
+            if (array instanceOf?(VariableAccess)) {
+                if (!array isResolved()) {
+                    res wholeAgain(this, "Reference to undeclared variable.")
+                    return Response OK
+                }
+            }
             res throwError(InvalidArrayAccess new(token, "Trying to index something that isn't an array, nor has an overload for the []/[]= operators"))
         }
 
@@ -109,6 +115,9 @@ ArrayAccess: class extends Expression {
             innerType := tDecl getInstanceType()
 
             parent := trail peek()
+            if(parent instanceOf?(Scope)) {
+                parent = (parent as Scope getSize() == 1) ? parent as Scope first() : parent
+            }
 
             if(!parent instanceOf?(FunctionCall)) {
                 if(parent instanceOf?(ArrayAccess)) {
@@ -237,6 +246,7 @@ ArrayAccess: class extends Expression {
 
     }
 
+    isResolved: func -> Bool { array isResolved() && type != null }
     getScore: func (op: OperatorDecl, reqType: Type, assign: BinaryOp, res: Resolver) -> Int {
 
         if(!(op getSymbol() equals?(assign != null ? "[]=" : "[]"))) {

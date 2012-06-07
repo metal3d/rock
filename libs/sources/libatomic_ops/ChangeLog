@@ -1,0 +1,129 @@
+
+[7.2alpha6] 2011-06-14
+======================
+
+* Add missing AO_HAVE_ macros.
+* Add support of avr32 CPU.
+* Better support of various models of ARM.
+* Disable AO_compare_double_and_swap_double_full for SunCC x86 as not working.
+* Enable ARM Thumb-2 mode.
+* Fix AO_test_and_set_full for SunCC (x86).
+* Fix bugs in tests.
+* Fix clobbers in AO_compare_and_swap_full (x86.h).
+* Fix typos in identifiers and comments.
+* Improve AO_sync for PowerPC.
+* Improve make scripts (configure.ac).
+* Make get_mmaped() in atomic_ops_malloc.c more portable.
+* Support Intel compiler.
+* Support NaCl target.
+* Suppress compiler warnings in various places.
+* Test more predefined macros (ARM, PowerPC).
+* Use assembly code only for MS VC if available (x86_64).
+* Use built-in __sync_bool_compare_and_swap if available (x86_64).
+* Workaround bugs in LLVM GCC and SunCC regarding XCHG (x86, x86_64).
+
+
+[7.2alpha4] 2009-12-02
+======================
+
+* Fix typos in comments, identifiers and documentation.
+* Implement AO_compare_and_swap_full for SPARC.
+* Refine ARM-specific code.
+* Refine code and comments for MS VC.
+* Regenerate make scripts.
+* Share common code for all 32-bit CPUs (MS VC).
+* Support DigitalMars and Watcom compilers.
+* Support MS VC for ARM (WinCE).
+* Support SH CPU.
+* Support win32-pthreads.
+* Support x86 and x86_64 for SunCC compiler.
+
+
+[7.2alpha2] 2009-05-27
+======================
+
+* Add MIPS support.
+* Add better support for m68k.
+* Add "const" to first parameter of load calls.
+* Add parentheses around address argument for various macros.
+* Add some platform-specific documentation to INSTALL.
+* Add untested 64-bit support for PowerPC.
+* Fix AO_compare_and_swap_double_acquire.
+* Fix AO_int_fetch_and_add_full (x86_64).
+* Fix comments.
+* Fix s390 include paths.
+* Fix use of lwz instruction (PowerPC).
+* Refine clobbers (PowerPC).
+* Remove outdated info about Windows support in README.
+* Replace K&R-style function definition with ANSI C one.
+* add AO_compare_double_and_swap_double for ARMv6.
+* gcc/powerpc.h: Consider __NO_LWSYNC__.
+
+
+[7.1 release] 2008-02-11
+========================
+
+* Add test_and_set, AO_double_compare_and_swap generalizations.
+* Conditionally add compare_double_and_swap_double (x86).
+* Conditionally add compare_double_and_swap_double (x86).
+* Fix AO_compare_double_and_swap_double_full (x86) for PIC mode.
+* Fix AO_load_acquire for PowerPC.
+* Fix double-width CAS (x86).
+* Refine README (add more warnings about data dependencies).
+* Refine double_ptr_storage type definition.
+* Support ARMv6+ in GCC.
+* Support ArmCC compiler.
+* Use _InterlockedExchangeAdd for MS VC (x86).
+
+
+[7.0 release] 2007-06-28
+========================
+
+* Add 64-bit version of AO_load_acquire for PowerPC.
+* Add support of x86 and x86_64 for MS VC.
+* Do not assume that "mfence" is always present (x86.h).
+* Fix ARM AO_test_and_set_full.
+* Include windows.h (MS VC).
+* Update README to reflect C++0x effort.
+
+
+[1.2 release] 2006-07-11
+========================
+
+* Add prototypes to suppress compiler warnings.
+* Add simple VxWorks support.
+* Fix InterlockedCompareExchange proto usage.
+* Fix typos (ia64).
+* Include all_acquire_release_volatile.h and all_atomic_load_store.h (ia64).
+* Initial support for 64-bit targets.
+* Use "=q" for AO_test_and_set_full (x86).
+* Use inline assembler to generate "mfence" and byte sized XCHG.
+* Use new intrinsics available in MSVC 2003 and MSVC 2005.
+
+
+[1.1 release] 2005-09-27
+========================
+
+* Add and use read_ordered.h.
+* Change function naming from "byte" to "char".
+* Fix AO_test_and_set for ARM; define AO_CAN_EMUL_CAS.
+
+
+[1.0 release] 2005-03-21
+========================
+
+* Fix various bugs.
+* Add atomic_ops primitives for different sized data.
+* Add compare_double_and_swap_double and compare_and_swap_double.
+* Add initial support for atomic_ops for VC++/Windows/X86 and HP/UX.
+* Add minimal support for the Sun SPARC compiler.
+* Add support for platforms that require out-of-line assembly code.
+* Add support of int-wide operations on platforms with int-sized pointers.
+* Added libatomic_ops_gpl library with support for lock-free stack and malloc.
+* Attempt to support PowerPC.
+* Change atomic_ops include file structure.
+* Change most platforms to use byte-wide test-and-set locations.
+* Install under "atomic_ops" instead of "ao".
+* Remove compiler_barrier workaround for gcc 3.4+.
+* Renamed various types to end in _t.
+* Use autoconf, automake.

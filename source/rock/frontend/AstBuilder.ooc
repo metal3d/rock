@@ -518,7 +518,7 @@ AstBuilder: class {
         arg: Argument = match conventional {
             case true  => Argument new(null, name clone(), token())
             case false => AssArg new(name clone(), token())
-        }
+        } as Argument
         peek(FunctionDecl) args add(arg)
     }
 
@@ -565,6 +565,10 @@ AstBuilder: class {
 
     onTypeListElement: unmangled(nq_onTypeListElement) func (list: TypeList, element: Type) {
         list types add(element)
+    }
+
+    onTypeNamespace: unmangled(nq_onTypeNamespace) func (type: BaseType, ident: CString) {
+        type setNamespace(VariableAccess new(ident toString(), token()))
     }
 
     /*
@@ -714,6 +718,7 @@ AstBuilder: class {
         name := call generateTempName("comboRoot")
         call setName(name)
         vDecl := VariableDecl new(null, name, expr, expr token)
+        vDecl isGlobal = true // well, that's not true, but at least this way it won't be marked for partialing...
         onStatement(vDecl)
     }
 
@@ -804,7 +809,7 @@ AstBuilder: class {
                 }
             case node instanceOf?(ClassDecl) =>
                 cDecl := node as ClassDecl
-                fDecl := cDecl lookupFunction(ClassDecl DEFAULTS_FUNC_NAME, "")
+                fDecl := (cDecl isMeta) ? cDecl lookupFunction(ClassDecl DEFAULTS_FUNC_NAME, null) : cDecl meta lookupFunction(ClassDecl DEFAULTS_FUNC_NAME, null)
                 if(fDecl == null) {
                     fDecl = FunctionDecl new(ClassDecl DEFAULTS_FUNC_NAME, cDecl token)
                     cDecl addFunction(fDecl)
@@ -1040,6 +1045,10 @@ AstBuilder: class {
         Ternary new(condition, ifTrue, ifFalse, token())
     }
 
+    onDoubleArrow: unmangled(nq_onDoubleArrow) func(left, right: Expression) -> BinaryOp {
+        BinaryOp new(left, right, OpType doubleArr, token())
+    }
+
     onAssignAdd: unmangled(nq_onAssignAdd) func (left, right: Expression) -> BinaryOp {
         BinaryOp new(left, right, OpType addAss, token())
     }
@@ -1050,6 +1059,10 @@ AstBuilder: class {
 
     onAssignMul: unmangled(nq_onAssignMul) func (left, right: Expression) -> BinaryOp {
         BinaryOp new(left, right, OpType mulAss, token())
+    }
+
+    onAssignExp: unmangled(nq_onAssignExp) func (left, right: Expression) -> BinaryOp {
+        BinaryOp new(left, right, OpType expAss, token())
     }
 
     onAssignDiv: unmangled(nq_onAssignDiv) func (left, right: Expression) -> BinaryOp {
@@ -1094,6 +1107,10 @@ AstBuilder: class {
 
     onMul: unmangled(nq_onMul) func (left, right: Expression) -> BinaryOp {
         BinaryOp new(left, right, OpType mul, token())
+    }
+
+    onExp: unmangled(nq_onExp) func (left, right: Expression) -> BinaryOp {
+        BinaryOp new(left, right, OpType exp, token())
     }
 
     onDiv: unmangled(nq_onDiv) func (left, right: Expression) -> BinaryOp {

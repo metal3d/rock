@@ -463,7 +463,12 @@ FunctionDecl: class extends Declaration {
         // handle the case where we specialize a generic function
         if(owner) {
             meat := owner isMeta ? owner as ClassDecl : owner getMeta()
-            base := meat getBaseClass(this, true)
+            comeBack: Bool
+            base := meat getBaseClass(this, true, comeBack&)
+            if (comeBack) { // ugly_
+                res wholeAgain(this, "Resolving a missing interface declaration.")
+                return Response OK
+            }
 
             if(base != null) {
                 finalScore := 0
@@ -479,26 +484,26 @@ FunctionDecl: class extends Declaration {
                     if(arg getType() instanceOf?(FuncType)) {
                         fType1 := arg getType() as FuncType
                         // TODO: add check 1) number of argument 2) it's a FuncType
-                        fType2 := parent args[i] getType() as FuncType
+                        fType2 := ((i < parent args getSize()) ? parent args[i] getType() : null) as FuncType
 
                         //"for %s, got %s vs %s" printfln(toString(), fType1 toString(), fType2 toString())
 
                         for(j in 0..fType1 argTypes getSize()) {
                             type1 := fType1 argTypes[j]
-                            type2 := fType2 argTypes[j]
-
-                            if(!type1 isResolved() || !type2 isResolved()) {
-                                res wholeAgain(this, "should determine interface specialization")
-                                break
-                            }
-
-                            if(type2 isGeneric() && !type1 isGeneric()) {
-                                // there's a specialization going on!
-                                fType1 argTypes[j] = type2
-                                if(!genericConstraints) {
-                                    genericConstraints = HashMap<Type, Type> new()
+                            type2 := (fType2 != null && j < fType2 argTypes getSize()) ? fType2 argTypes[j] : null
+                            if(type2 != null) {
+                                if(!type1 isResolved() || !type2 isResolved()) {
+                                    res wholeAgain(this, "should determine interface specialization")
+                                    break
                                 }
-                                genericConstraints put(type2 clone(), type1 clone())
+                                if(type2 isGeneric() && !type1 isGeneric()) {
+                                    // there's a specialization going on!
+                                    fType1 argTypes[j] = type2
+                                    if(!genericConstraints) {
+                                        genericConstraints = HashMap<Type, Type> new()
+                                    }
+                                    genericConstraints put(type2 clone(), type1 clone())
+                                }
                             }
                         }
                     }
@@ -685,8 +690,9 @@ FunctionDecl: class extends Declaration {
                         constructCall := FunctionCall new("strArrayListFromCString", arg token)
                         constructCall args add(VariableAccess new(argc, arg token)) \
                                           .add(VariableAccess new(argv, arg token))
-
-                        vdfe := VariableDecl new(null, arg getName(), constructCall, token)
+                        // Mangle the argument's name :D
+                        arg fullName = "%s__%s" format(arg token module getUnderName(), arg name)
+                        vdfe := VariableDecl new(null, arg getFullName(), constructCall, token)
                         body add(0, vdfe)
                     }
                 }
@@ -746,11 +752,11 @@ FunctionDecl: class extends Declaration {
         }
 
         if (parentFunc getOwner()) {
-            if(parentCall expr getType() == null) {
+            if(parentCall expr == null || parentCall expr getType() == null) {
                 res wholeAgain(this, "Need type of the expr of the parent call")
                 return false
             }
-
+            
             j := 0
             callExprTypeArgs := parentCall expr getType() getTypeArgs()
             if(callExprTypeArgs) {

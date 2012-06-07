@@ -199,12 +199,12 @@ Buffer: class extends Iterable<Char> {
     /** appends *other* to *this* */
     append: func ~pointer (other: Char*, otherLength: SizeT) {
         origlen := size
-        //"appending `" print()
-        //fwrite(other, 1, otherLength, stdout)
-        //"` to `%s`, new length = %zd" printfln(data, size + otherLength)
-        
         setLength(size + otherLength)
         memcpy(data + origlen, other, otherLength)
+    }
+
+    append: func ~bufLength (other: This, otherLength: SizeT) {
+        append(other data, otherLength)
     }
 
     /** appends a char to either *this* or a clone*/
@@ -311,7 +311,6 @@ Buffer: class extends Iterable<Char> {
         if (maxpos < 0) return -1
 
         found : Bool
-        sstart := offset
 
         for (sstart in offset..(maxpos + 1)) {
             found = true
@@ -340,7 +339,7 @@ Buffer: class extends Iterable<Char> {
 
     findAll: func ~pointer ( what : Char*, whatSize: SizeT, searchCaseSensitive := true) -> ArrayList <SizeT> {
         if (what == null || whatSize == 0) return ArrayList <SizeT> new(0)
-        result := ArrayList <SizeT> new (size / whatSize)
+        result := ArrayList <SSizeT> new (size / whatSize)
         offset : SSizeT = (whatSize ) * -1
         while (((offset = find(what, whatSize, offset + whatSize, searchCaseSensitive)) != -1)) result add (offset)
         result
@@ -435,7 +434,7 @@ Buffer: class extends Iterable<Char> {
     /** return *true* if *this* contains the string *s* */
     contains?: func ~buf (s: This) -> Bool { indexOf(s) != -1 }
 
-    trim: func~pointer(s: Char*, sLength: SizeT) {
+    trim: func ~pointer(s: Char*, sLength: SizeT) {
         trimRight(s, sLength)
         trimLeft(s, sLength)
     }

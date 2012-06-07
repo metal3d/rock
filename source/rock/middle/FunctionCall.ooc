@@ -4,7 +4,7 @@ import Visitor, Expression, FunctionDecl, Argument, Type, VariableAccess,
        TypeDecl, Node, VariableDecl, AddressOf, CommaSequence, BinaryOp,
        InterfaceDecl, Cast, NamespaceDecl, BaseType, FuncType, Return,
        TypeList, Scope, Block, InlineContext, StructLiteral, NullLiteral,
-       IntLiteral
+       IntLiteral, Ternary, ClassDecl, CoverDecl
 import tinker/[Response, Resolver, Trail, Errors]
 
 /**
@@ -319,15 +319,16 @@ FunctionCall: class extends Expression {
                             return Response OK
                         }
 
-                        if(ref) {
-                            if(ref vDecl) {
-                                closureIndex := trail find(FunctionDecl)
+                        if(ref && ref vDecl) {
+                            closureIndex := trail find(FunctionDecl)
 
-                                if(closureIndex > depth) { // if it's not found (-1), this will be false anyway
-                                    closure := trail get(closureIndex) as FunctionDecl
-                                    if(closure isAnon && expr == null) {
-                                        closure markForPartialing(ref vDecl, "v")
-                                    }
+                            if(closureIndex > depth) { // if it's not found (-1), this will be false anyway
+                                closure := trail get(closureIndex) as FunctionDecl
+                                // the ref may also be a closure's argument, in wich case we just ignore this
+
+                                if(closure isAnon && !ref vDecl isGlobal &&
+                                    !closure args contains?(|arg| arg == ref vDecl || arg name == ref vDecl name + "_generic")) {
+                                    closure markForPartialing(ref vDecl, "v")
                                 }
                             }
                         }
@@ -495,6 +496,7 @@ FunctionCall: class extends Expression {
                     }
                 }
                 res throwError(UnresolvedCall new(this, message, precisions))
+                return Response OK
             } else {
                 res wholeAgain(this, "not resolved")
                 return Response OK
@@ -508,6 +510,15 @@ FunctionCall: class extends Expression {
             trail addBeforeInScope(this, vDecl)
             expr = VariableAccess new(vDecl, expr token)
             return Response OK
+        }
+
+        // check we are not trying to call a non-static member function on the metaclass
+        if(expr instanceOf?(VariableAccess) && \
+        (expr as VariableAccess getRef() instanceOf?(ClassDecl) || expr as VariableAccess getRef() instanceOf?(CoverDecl)) && \
+        (expr as VariableAccess getRef() as TypeDecl inheritsFrom?(ref getOwner()) || \
+        expr as VariableAccess getRef() == ref getOwner()) && !ref isStatic) {
+            res throwError(UnresolvedCall new(this, "No such function %s%s for `%s` (%s)" format(name, getArgsTypesRepr(),
+                            expr getType() toString(), expr getType() getRef() ? expr getType() getRef() token toString() : "(nil)"), ""))
         }
 
         /* check for String instances passed to C vararg functions if helpful.
@@ -815,6 +826,24 @@ FunctionCall: class extends Expression {
         Response OK
     }
 
+    /** print an appropriate warning if the user tries to use vararg functions in binary/ternary expressions.
+        See bug #311 for details. */
+    printVarargExpressionWarning: func (trail: Trail) {
+        i := trail getSize() - 1
+        while(i >= 0) {
+            node := trail data get(i) as Node
+            // boolean binary ops and ternary ops are the problem!
+            if((node instanceOf?(BinaryOp) && node as BinaryOp isBooleanOp()) \
+               || node instanceOf?(Ternary)) {
+                token formatMessage("Found a vararg function call inside a binary/ternary expression. Please unwrap this expression. See https://github.com/nddrylliog/rock/issues/311 for details", "WARNING") println()
+            } else if(node instanceOf?(Scope)) {
+                // we're not part of the same expression anymore!
+                break;
+            }
+            i -= 1
+        }
+    }
+
     /**
      * Resolve ooc variable arguments
      */
@@ -825,6 +854,7 @@ FunctionCall: class extends Expression {
         match (lastArg := ref args last()) {
             case vararg: VarArg =>
                 if(vararg name != null) {
+                    // ooc varargs have names!
                     numVarArgs := (args size - (ref args size - 1))
                     
                     if(!args empty?()) {
@@ -858,8 +888,9 @@ FunctionCall: class extends Expression {
                     }
 
                     vaType := BaseType new("VarArgs", token)
+                    argsAddress := AddressOf new(VariableAccess new(argsDecl, token), token)
                     elements2 := [
-                        AddressOf new(VariableAccess new(argsDecl, token), token)
+                        argsAddress
                         NullLiteral new(token)
                         IntLiteral new(numVarArgs, token)
                     ] as ArrayList<Expression>
@@ -873,6 +904,8 @@ FunctionCall: class extends Expression {
                         args removeAt(args lastIndex())
                     )
                     args add(VariableAccess new(vaDecl, token))
+                    // print a warning if needed
+                    printVarargExpressionWarning(trail)
                 }
         }
 
@@ -895,7 +928,7 @@ FunctionCall: class extends Expression {
             }
             if(!implType isGeneric() || implType pointerLevel() > 0) { j += 1; continue }
 
-            //printf(" >> Reviewing arg %s in call %s\n", arg toString(), toString())
+            //" >> Reviewing arg %s in call %s, in ref %s" printfln(implArg toString(), toString(), ref toString())
 
             callArg := args get(j)
             typeResult := callArg getType()

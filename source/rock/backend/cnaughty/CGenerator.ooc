@@ -14,7 +14,7 @@ import ../../middle/[Module, FunctionDecl, FunctionCall, Expression, Type,
     Cast, Comparison, Ternary, BoolLiteral, Argument, Statement,
     AddressOf, Dereference, CommaSequence, UnaryOp, ArrayAccess, Match,
     FlowControl, InterfaceDecl, Version, Block, EnumDecl, ArrayLiteral,
-    ArrayCreation, StructLiteral, InlineContext]
+    ArrayCreation, StructLiteral, InlineContext, FuncType]
 
 import Skeleton, FunctionDeclWriter, ControlStatementWriter,
     ClassDeclWriter, ModuleWriter, CoverDeclWriter, FunctionCallWriter,
@@ -260,6 +260,9 @@ CGenerator: class extends Skeleton {
         } else if(varAcc ref instanceOf?(FunctionDecl)) {
             fDecl := varAcc ref as FunctionDecl
             FunctionDeclWriter writeFullName(this, fDecl)
+        } else if(varAcc ref instanceOf?(FuncType)) {
+            // Yes, we need to write function types too ;D
+            current app("lang_types__Closure_class()")
         }
     }
 
@@ -279,11 +282,15 @@ CGenerator: class extends Skeleton {
             current app('('). app(sl getType()). app(") ")
         }
         current app("{ "). tab()
-        isFirst := true
+
+        isVarArgs := sl getType() getName() == "VarArgs"
+        i := 0
         for(element in sl elements) {
-            if(!isFirst) current app(", ")
-            current nl(). app(element)
-            isFirst = false
+            if(i > 0) current app(", ")
+            current nl()
+            if(isVarArgs && i == 0) current app("(void*) ")
+            current app(element)
+            i += 1
         }
         current untab(). nl(). app("}")
     }

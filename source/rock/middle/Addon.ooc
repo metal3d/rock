@@ -1,5 +1,5 @@
 import structs/HashMap
-import Node, Type, TypeDecl, FunctionDecl, FunctionCall, Visitor, VariableAccess
+import Node, Type, TypeDecl, FunctionDecl, FunctionCall, Visitor, VariableAccess, ClassDecl, CoverDecl
 import tinker/[Trail, Resolver, Response]
 
 /**
@@ -63,6 +63,10 @@ Addon: class extends Node {
                 base addons add(this)
 
                 for(fDecl in functions) {
+                    if(fDecl name == "init" && (base instanceOf?(ClassDecl) || base instanceOf?(CoverDecl))) {
+                        if(base instanceOf?(ClassDecl)) base as ClassDecl addInit(fDecl)
+                        else base getMeta() addInit(fDecl)
+                    }
                     fDecl setOwner(base)
                 }
             } else {
@@ -94,9 +98,15 @@ Addon: class extends Node {
         hash := TypeDecl hashName(call name, call suffix)
         fDecl := functions get(hash)
         if(fDecl) {
-            call suggest(fDecl, res, trail)
+            if(call suggest(fDecl, res, trail)) {
+                // add `this` if needed.
+                if(fDecl hasThis() && !call getExpr()) {
+                    call setExpr(VariableAccess new("this", call token))
+                }
+            }
         }
 
+        // TODO: why do we even need this?
         if(!call getSuffix()) {
             for(fDecl in functions) {
                 if(fDecl name == call name) {

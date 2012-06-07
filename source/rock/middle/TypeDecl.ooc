@@ -129,7 +129,8 @@ TypeDecl: abstract class extends Declaration {
             if(superType getName() == "Object" && name != "Class") {
                 meta setSuperType(BaseType new("ClassClass", superType token))
             } else {
-                meta setSuperType(BaseType new(superType getName() + "Class", superType token))
+                namespace := (superType instanceOf?(BaseType)) ? superType as BaseType namespace : null
+                meta setSuperType(BaseType new(superType getName() + "Class", namespace, superType token))
             }
         }
     }
@@ -617,16 +618,23 @@ TypeDecl: abstract class extends Declaration {
     }
 
     resolveType: func (type: BaseType, res: Resolver, trail: Trail) -> Int {
+	
         if(type getName() == "This") {
             if(type suggest(getNonMeta() ? getNonMeta() : this)) return 0
         }
 
         for(typeArg: VariableDecl in getTypeArgs()) {
             if(typeArg name == type name) {
-                type suggest(typeArg)
-                return 0
+                if(type suggest(typeArg)) return 0
             }
         }
+
+	finalScore := 0
+	haystack := getInstanceType()
+	result := haystack searchTypeArg(type getName(), finalScore&)
+	if (result && finalScore >= 0) {
+	    if(type suggest(result getRef())) return 0
+	}
 
         0
     }
@@ -749,24 +757,17 @@ TypeDecl: abstract class extends Declaration {
         }
 
         for(addon in getAddons()) {
-            has := false
-
-            // It's also possible that the addon was defined in the
-            // function call's module.
-            if(call token module == addon token module) {
-                has = true
-            } else for(imp in call token module getGlobalImports()) {
-                if(imp getModule() == addon token module) {
-                    has = true
-                    break
+            if(resolveCallInAddon(addon, call, res, trail) == -1) return -1
+        }
+        
+        {
+            ancester := getSuperRef()
+            while(ancester != null) {
+                for(addon in ancester getAddons()) {
+                    if(resolveCallInAddon(addon, call, res, trail) == -1) return -1
                 }
+                ancester = ancester getSuperRef()
             }
-
-            if(!has) {
-                continue
-            }
-
-            if(addon resolveCall(call, res, trail) == -1) return -1
         }
 
         if(call getRef() == null) {
@@ -785,6 +786,27 @@ TypeDecl: abstract class extends Declaration {
 
         0
 
+    }
+    
+    resolveCallInAddon: func (addon: Addon, call: FunctionCall, res: Resolver, trail: Trail) -> Int {
+        has := false
+
+        // It's also possible that the addon was defined in the
+        // function call's module.
+        if(call token module == addon token module) {
+            has = true
+        } else for(imp in call token module getGlobalImports()) {
+            if(imp getModule() == addon token module) {
+                has = true
+                break
+            }
+        }
+
+        if(has) {
+            if(addon resolveCall(call, res, trail) == -1) return -1
+        }
+        
+        0
     }
 
     inheritsFrom?: func (tDecl: TypeDecl) -> Bool {
@@ -838,7 +860,10 @@ TypeDecl: abstract class extends Declaration {
     getMeta: func -> ClassDecl { meta }
     getNonMeta: func -> This { nonMeta }
 
-    setVersion: func (=verzion) {}
+    setVersion: func (=verzion) {
+        meat := getMeta()
+        if(meat) meat setVersion(verzion) // let's hope there's no meta loop
+    }
     getVersion: func -> VersionSpec { verzion ? verzion : (getNonMeta() ? getNonMeta() getVersion() : null) }
 
 }

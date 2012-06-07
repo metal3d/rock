@@ -139,14 +139,13 @@ Module: class extends Node {
         if (old != null) {
             if ((old verzion == tDecl verzion) ||
                 (old verzion != null && tDecl verzion != null && old verzion equals?(tDecl verzion))) {
-
                 params errorHandler onError(TypeRedefinition new(old, tDecl))
                 return
             }
         }
 
         types put(tDecl name, tDecl)
-        if(tDecl getMeta()) types put(tDecl getMeta() name, tDecl getMeta())
+        if(tDecl getMeta()) addType(tDecl getMeta())
     }
 
     addOperator: func (oDecl: OperatorDecl) {
@@ -215,11 +214,12 @@ Module: class extends Node {
 
         //printf("Looking for %s in %s\n", access toString(), toString())
 
-        // TODO: optimize by returning as soon as the access is resolved
         resolveAccessNonRecursive(access, res, trail)
+        if(access ref) return 0
 
         for(imp in getGlobalImports()) {
             imp getModule() resolveAccessNonRecursive(access, res, trail)
+            if(access ref) return 0
         }
 
         namespace := namespaces get(access getName())
@@ -238,7 +238,7 @@ Module: class extends Node {
 
         for(f in functions) {
             if(f name == access name) {
-                access suggest(f)
+                if(access suggest(f)) return 0
             }
         }
 

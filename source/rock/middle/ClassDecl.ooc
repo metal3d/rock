@@ -5,7 +5,7 @@ import ../frontend/Token
 import Expression, Type, Visitor, TypeDecl, Cast, FunctionCall, FunctionDecl,
        Module, Node, VariableDecl, VariableAccess, BinaryOp, Argument,
        Return, CoverDecl, BaseType
-import tinker/[Response, Resolver, Trail]
+import tinker/[Response, Resolver, Trail, Errors]
 
 ClassDecl: class extends TypeDecl {
 
@@ -15,6 +15,8 @@ ClassDecl: class extends TypeDecl {
 
     isAbstract := false
     isFinal := false
+    
+    shouldCheckNoArgConstructor := false
 
     defaultInit := null as FunctionDecl
 
@@ -36,7 +38,39 @@ ClassDecl: class extends TypeDecl {
 
     accept: func (visitor: Visitor) { visitor visitClassDecl(this) }
 
+    hasOtherInit: func -> Bool {
+        for(fDecl in functions) if(fDecl getName() == "init") {
+            if(fDecl != defaultInit) return true
+        }
+        false
+    }
+
     resolve: func (trail: Trail, res: Resolver) -> Response {
+
+        if(shouldCheckNoArgConstructor) {
+            finalScore := 0
+            if(defaultInit == null || hasOtherInit()) {
+                shouldCheckNoArgConstructor = false
+            } else {
+                if(getSuperRef() == null) superType resolve(trail, res)
+                if(getSuperRef() == null) {
+                    res wholeAgain(this, "need superRef to check for noarg cons")
+                    return Response OK
+                } else {
+                    superRef := getSuperRef()
+                    fDecl := superRef getFunction("init", "", finalScore&)
+                    if(finalScore == -1) {
+                        res wholeAgain(this, "something not resolved in getFunction")
+                        return Response OK
+                    }
+                    
+                    if (fDecl == null || fDecl getArguments() size > 0) {
+                        res throwError(NoDefaultConstructorError new(token, "No default no-arg constructor in super-class %s. You need to define a constructor yourself." format(
+                            superType getName())))
+                    }
+                }
+            }
+        }
 
         if(isMeta) {
             if(getNonMeta() class == ClassDecl) {
@@ -91,16 +125,27 @@ ClassDecl: class extends TypeDecl {
         return fDecl
     }
 
-    getBaseClass: func ~noInterfaces (fDecl: FunctionDecl) -> ClassDecl {
-        getBaseClass(fDecl, false)
+    
+    getBaseClass: func ~afterResolve(fDecl: FunctionDecl) -> ClassDecl {
+        b: Bool
+        getBaseClass(fDecl, false, b&)
     }
 
-    getBaseClass: func (fDecl: FunctionDecl, withInterfaces: Bool) -> ClassDecl {
-        sRef := getSuperRef() as ClassDecl
+    getBaseClass: func ~noInterfaces (fDecl: FunctionDecl, comeBack: Bool*) -> ClassDecl {
+        getBaseClass(fDecl, false, comeBack)
+    }
 
+    getBaseClass: func (fDecl: FunctionDecl, withInterfaces: Bool, comeBack: Bool*) -> ClassDecl {
+        sRef := getSuperRef() as ClassDecl
+        // An interface might not yet be resolved.
+        comeBack@ = false 
         // first look in the supertype, if any
         if(sRef != null) {
-            base := sRef getBaseClass(fDecl)
+             
+            base := sRef getBaseClass(fDecl, comeBack)
+            if (comeBack@) { // ugly_
+                return null
+            }
             if(base != null) {
                 return base
             }
@@ -108,10 +153,19 @@ ClassDecl: class extends TypeDecl {
 
         // look in interface types, if any
         if(withInterfaces && getNonMeta()) for(interfaceType in getNonMeta() interfaceTypes) {
-            iRef := interfaceType getRef() as ClassDecl
+            iRef := interfaceType getRef() as ClassDecl // missing interface
+            if (!iRef) { // ugly_
+                comeBack=true
+                return null
+            }
+
             if(!iRef isMeta) iRef = iRef getMeta()
             if(iRef != null) {
-                base := iRef getBaseClass(fDecl)
+                base := iRef getBaseClass(fDecl, comeBack)
+                if (comeBack) { // ugly_
+                    comeBack=true
+                    return null
+                }
                 if(base != null) {
                     return base
                 }
@@ -149,6 +203,7 @@ ClassDecl: class extends TypeDecl {
             // TODO: check if the super-type actually has a no-arg constructor, throw an error if not
             if(superType != null && superType getName() != "ClassClass") {
                 init getBody() add(FunctionCall new("super", token))
+                shouldCheckNoArgConstructor = true
             }
 
             defaultInit = init // if defaultInit is set earlier, it'll try to remove it..
@@ -202,7 +257,7 @@ ClassDecl: class extends TypeDecl {
             return
         }
 
-        newType := getNonMeta() getInstanceType() as BaseType
+        newType := isMeta ? getNonMeta() getInstanceType() as BaseType : getInstanceType() as BaseType
 
         constructor := FunctionDecl new("new", fDecl token)
         constructor setStatic(true)
@@ -261,3 +316,6 @@ ClassDecl: class extends TypeDecl {
     }
 }
 
+NoDefaultConstructorError: class extends Error {
+    init: super func ~tokenMessage
+}

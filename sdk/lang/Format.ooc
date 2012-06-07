@@ -212,10 +212,16 @@ parseArg: func(res: Buffer, info: FSInfoStruct*, va: VarArgsIterator*, p: Char*)
                 tmp append('+')
             if (info@ fieldwidth != 0)
                 tmp append(info@ fieldwidth toString())
-            if (info@ precision != 0)
+            if (info@ precision >= 0)
                 tmp append("." + info@ precision toString())
             tmp append("f")
-            res append(tmp toString() cformat(argNext(va, Float) as Float))
+            T := va@ getNextType()
+            match T {
+              case Double =>
+                res append(tmp toString() cformat(argNext(va, Double) as Double))
+              case => // assume everything else is Float
+                res append(tmp toString() cformat(argNext(va, Float) as Float))
+            }
             
         case 'c' =>
             mprintCall = false
@@ -319,7 +325,7 @@ getEntityInfo: inline func (info: FSInfoStruct@, va: VarArgsIterator*, start: Ch
 }
 
 
-format: func~main <T> (fmt: T, args: ... ) -> T {
+format: func ~main <T> (fmt: T, args: ... ) -> T {
     if (args count == 0) return fmt
     res := Buffer new(512)
     va := args iterator()

@@ -7,6 +7,8 @@ Socket: abstract class {
     descriptor: Int
     family, type, protocol: Int
     connected? := false
+    listening? := false
+    hasData?   := false
 
     init: func ~sock(=family, =type, =protocol) {
         descriptor = socket(family, type, protocol)
@@ -135,6 +137,15 @@ Socket: abstract class {
 
     }
 
+    /**
+	Enable/disable the reuse of the same address
+     */
+    setReuseAddr: func (reuse: Bool) {
+	
+	option := reuse ? 1 : 0
+	setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, option&, option class size)
+
+    }
 }
 
 AddressFamily: cover {

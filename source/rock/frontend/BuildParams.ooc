@@ -113,9 +113,6 @@ BuildParams: class {
     // If it's true, will use String makeLiteral() to make string literals instaed of just C string literals
     newstr := true
 
-    // dead code elimination
-    dce := false
-
     // location of the compiler's distribution, with a libs/ folder for the gc, etc.
     distLocation: File
 
@@ -163,6 +160,9 @@ BuildParams: class {
 
     // Cache libs in `libcachePath` directory
     libcache := true
+    version(windows) {
+        libcache = false
+    }
 
     // Path to store cache-libs
     libcachePath := ".libs"
@@ -197,7 +197,7 @@ BuildParams: class {
     //shout := false
     shout := true // true as long as we're debugging
 
-    // If false, output .o files. Otherwise output exectuables
+    // If false, output .o files. Otherwise output executables
     link := true
 
     // Run files after compilation
@@ -230,7 +230,7 @@ BuildParams: class {
 
     // if non-null, will create a dynamic library
     dynamiclib : String = null
-    
+
     // name of the package we should only be packaging
     // modules in any other package will be ignored
     // when building static/dynamic libraries

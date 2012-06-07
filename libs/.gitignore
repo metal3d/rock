@@ -1,0 +1,10 @@
+*.o
+*.lo
+*.la
+linux*
+win*
+osx*
+freebsd*
+dragonfly*
+openbsd*
+netbsd*
